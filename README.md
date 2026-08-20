@@ -31,7 +31,7 @@ It runs entirely in the browser. No install, no back end, no account.
 
 ### Em português
 
-Você é o topógrafo do vale. Seis propriedades rurais precisam de levantamento
+Você está num vale com propriedades rurais a serem medidas. Seis propriedades rurais precisam de levantamento
 planimétrico: implante os marcos, instale a estação total, oriente pela ré, vise os
 vértices, feche e compense a poligonal e entregue a planta e o memorial descritivo. O dono
 da propriedade paga na sede, e o dinheiro compra equipamento melhor.

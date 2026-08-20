@@ -32,6 +32,18 @@ export const BASE_PAY_PER_HA = 4500;
 export const CALLOUT = 1400;
 
 /**
+ * What walking off an unfinished job costs.
+ *
+ * Leaving a parcel mid-survey already throws its measurements away for free
+ * (a fresh `service.start` resets them) — this is the second half of that
+ * cost, so the choice to abandon a job is a felt one rather than a free
+ * do-over. Set at half a callout: enough to make switching a real decision,
+ * not enough to lock a player into a job they realise too late they can't
+ * finish.
+ */
+export const JOB_SWITCH_PENALTY = 700;
+
+/**
  * How good the survey was, 0..1, from the achieved relative precision against
  * what the difficulty demands.
  *

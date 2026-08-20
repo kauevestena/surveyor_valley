@@ -402,6 +402,56 @@
   gap: 1.15rem;
 }
 
+/* ---- the wizard shell: step dots, one screen, and its nav row ---------- */
+
+.intro-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.intro-step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--panel-sunk);
+  border: 2px solid var(--wood-dark);
+}
+
+.intro-step-dot.is-active {
+  background: var(--accent);
+  border-color: var(--accent-dark);
+}
+
+.intro-step-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+  margin-left: 0.5rem;
+}
+
+.intro-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 1.3rem;
+  padding-top: 1rem;
+  border-top: 2px solid var(--panel-sunk);
+}
+
+.intro-nav-forward {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.intro-nav .btn {
+  min-width: 7rem;
+}
+
 /* ---- who you are ------------------------------------------------------- */
 
 /* The wordmark at the top of the intro. Vector, so it is sharp at any width. */
@@ -514,6 +564,16 @@
 .lang-switch {
   display: flex;
   gap: 0.35rem;
+}
+
+/* The intro dialog has no close button (it isn't dismissible), so the shared
+   `.modal-head`'s space-between would shove the title all the way to the far
+   right the moment the language toggle becomes a second child. Pack both to
+   the left instead, title following the buttons. */
+.modal-head-lang {
+  justify-content: flex-start;
+  gap: 0.9rem;
+  flex-wrap: wrap;
 }
 
 .lang-btn {
@@ -833,9 +893,43 @@
   background: var(--accent-soft);
 }
 
+.parcel-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
 .parcel-card h4 {
   font-size: 0.95rem;
   margin-bottom: 0.1rem;
+}
+
+.parcel-badges {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.parcel-badge {
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.parcel-badge-near {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  border: 1.5px solid var(--accent);
+}
+
+.parcel-badge-ready {
+  background: #fff1cc;
+  color: #8a5a12;
+  border: 1.5px solid var(--gold);
 }
 
 .parcel-card p {
@@ -954,6 +1048,17 @@
   font-size: 0.8rem;
   font-weight: 650;
   color: #2f6b22;
+}
+
+.parcel-warn {
+  margin: 0 0 0.6rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 5px;
+  background: var(--red-soft);
+  border: 2px solid var(--red);
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: #8a2418;
 }
 
 .parcel-done {

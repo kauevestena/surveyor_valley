@@ -10,7 +10,7 @@
 import { el } from './dom.js';
 import { t, num } from './i18n.js';
 import { reusableFor } from '../survey/network.js';
-import { estimatePayment } from '../game/economy.js';
+import { estimatePayment, JOB_SWITCH_PENALTY } from '../game/economy.js';
 import { fmtDuration } from '../survey/units.js';
 
 /**
@@ -21,9 +21,45 @@ import { fmtDuration } from '../survey/units.js';
  * @param {object} p.difficulty
  * @param {(parcelId:string)=>void} p.onChoose
  * @param {boolean} [p.dismissible] false while the player has no active job
+ * @param {string|null} [p.activeParcelId] the job in progress, if any — taking
+ *   a DIFFERENT card than this one is a switch, and costs money
+ * @param {{e:number,n:number}|null} [p.playerPos] for "nearest" badging
+ * @param {Set<string>} [p.surveyedIds] every target id measured so far, for
+ *   "most already measured" badging
  */
-export function showParcelPicker({ modals, parcels, state, difficulty, onChoose, dismissible = true }) {
+export function showParcelPicker({
+  modals,
+  parcels,
+  state,
+  difficulty,
+  onChoose,
+  dismissible = true,
+  activeParcelId = null,
+  playerPos = null,
+  surveyedIds = new Set(),
+}) {
   const done = Object.values(state.parcels || {}).filter((p) => p.status === 'done').length;
+
+  // Badges point at the best reasons to switch, not at every job — so they
+  // only compete among jobs that are actually candidates: not finished, and
+  // not the one already underway (switching to your own job isn't a choice).
+  const candidates = parcels.filter((p) => p.id !== activeParcelId && state.parcels?.[p.id]?.status !== 'done');
+  const nearestId = playerPos
+    ? candidates.reduce(
+        (best, p) => {
+          const d = Math.hypot(p.centroid.e - playerPos.e, p.centroid.n - playerPos.n);
+          return d < best.d ? { id: p.id, d } : best;
+        },
+        { id: null, d: Infinity },
+      ).id
+    : null;
+  const mostReadyId = candidates.reduce(
+    (best, p) => {
+      const n = p.markIds.filter((id) => surveyedIds.has(id)).length;
+      return n > best.n ? { id: p.id, n } : best;
+    },
+    { id: null, n: 0 },
+  ).id;
 
   const body = el('div');
   body.append(
@@ -42,11 +78,21 @@ export function showParcelPicker({ modals, parcels, state, difficulty, onChoose,
     const progress = state.parcels?.[parcel.id];
     const isDone = progress?.status === 'done';
     const reusable = reusableFor(state.network || [], parcel, 150);
+    const isSwitch = activeParcelId != null && parcel.id !== activeParcelId && !isDone;
+
+    const badges = [];
+    if (parcel.id === nearestId) badges.push(el('span.parcel-badge.parcel-badge-near', { text: t('picker.nearest') }));
+    if (parcel.id === mostReadyId) badges.push(el('span.parcel-badge.parcel-badge-ready', { text: t('picker.mostReady') }));
 
     const node = el(
       `div.parcel-card${isDone ? '.is-done' : ''}`,
       {},
-      el('h4', { text: parcel.propertyName }),
+      el(
+        'div.parcel-card-head',
+        {},
+        el('h4', { text: parcel.propertyName }),
+        badges.length ? el('div.parcel-badges', {}, badges) : null,
+      ),
       el('p.parcel-owner', { text: parcel.owner }),
       el(
         'dl.parcel-facts',
@@ -64,6 +110,14 @@ export function showParcelPicker({ modals, parcels, state, difficulty, onChoose,
       node.append(
         el('p.parcel-reuse', {
           text: t('picker.reusable', { n: reusable.length }),
+        }),
+      );
+    }
+
+    if (isSwitch) {
+      node.append(
+        el('p.parcel-warn', {
+          text: t('picker.switchCost', { amount: num(JOB_SWITCH_PENALTY, 0) }),
         }),
       );
     }

@@ -273,25 +273,29 @@ export function makeOverlays({ camera }) {
     rows.push([t('readout.azimuth'), fmtAngle(r.azimuth)]);
     rows.push([t('readout.distance'), fmtMetres(r.distance, lang)]);
 
-    const padX = 11;
-    const padY = 9;
-    const rowH = 17;
-    const titleH = 19;
-    const noteH = blocked ? 17 : 0;
+    // 20% bigger all round — panel, dial and type together — so the numbers a
+    // student is meant to be reading off this thing are actually comfortable
+    // to read, not just technically present.
+    const S = 1.2;
+    const padX = 11 * S;
+    const padY = 9 * S;
+    const rowH = 17 * S;
+    const titleH = 19 * S;
+    const noteH = blocked ? 17 * S : 0;
 
     ctx.save();
-    ctx.font = '600 11px "Inter", system-ui, sans-serif';
+    ctx.font = `600 ${Math.round(11 * S)}px "Inter", system-ui, sans-serif`;
     let textW = 0;
-    for (const [k, v] of rows) textW = Math.max(textW, ctx.measureText(k).width + ctx.measureText(v).width + 26);
+    for (const [k, v] of rows) textW = Math.max(textW, ctx.measureText(k).width + ctx.measureText(v).width + 26 * S);
     if (blocked) textW = Math.max(textW, ctx.measureText(t('readout.blocked')).width);
 
-    const w = Math.min(Math.max(textW + padX * 2, 190), Math.max(160, camera.vw - 28));
+    const w = Math.min(Math.max(textW + padX * 2, 190 * S), Math.max(160 * S, camera.vw - 28));
     // The dial grows the panel UPWARD, because the panel is anchored by its
     // bottom edge — so it can never push down into the batch bar. On a short
     // window it is dropped rather than allowed to reach the checklist.
     const dial = circleDial(station, r);
-    const dialR = Math.min(46, (w - padX * 2) / 2 - 16);
-    const dialH = camera.vh > 470 ? dialR * 2 + 22 : 0;
+    const dialR = Math.min(46 * S, (w - padX * 2) / 2 - 16 * S);
+    const dialH = camera.vh > 470 ? dialR * 2 + 22 * S : 0;
     const h = titleH + dialH + rows.length * rowH + noteH + padY * 2;
     // Anchored to the corner. Bottom-centre already holds the batch bar and the
     // toasts, and bottom-left the scale bar; this corner is the free one — on a
@@ -312,22 +316,22 @@ export function makeOverlays({ camera }) {
 
     ctx.textBaseline = 'middle';
     ctx.fillStyle = blocked ? COL.blocked : COL.sight;
-    ctx.font = '700 11px "Inter", system-ui, sans-serif';
+    ctx.font = `700 ${Math.round(11 * S)}px "Inter", system-ui, sans-serif`;
     ctx.textAlign = 'left';
     ctx.fillText(t('readout.title'), x + padX, y + padY + titleH / 2);
 
     let ry = y + padY + titleH;
     if (dialH) {
-      drawDial(ctx, x + w / 2, ry + dialH / 2 - 4, dialR, dial, blocked);
+      drawDial(ctx, x + w / 2, ry + dialH / 2 - 4 * S, dialR, dial, blocked, S);
       ry += dialH;
     }
     for (const [k, v] of rows) {
-      ctx.font = '600 11px "Inter", system-ui, sans-serif';
+      ctx.font = `600 ${Math.round(11 * S)}px "Inter", system-ui, sans-serif`;
       ctx.fillStyle = COL.inkSoft;
       ctx.textAlign = 'left';
       ctx.fillText(k, x + padX, ry + rowH / 2);
 
-      ctx.font = '700 12px ui-monospace, "SFMono-Regular", Menlo, monospace';
+      ctx.font = `700 ${Math.round(12 * S)}px ui-monospace, "SFMono-Regular", Menlo, monospace`;
       ctx.fillStyle = COL.ink;
       ctx.textAlign = 'right';
       ctx.fillText(v, x + w - padX, ry + rowH / 2);
@@ -335,7 +339,7 @@ export function makeOverlays({ camera }) {
     }
 
     if (blocked) {
-      ctx.font = '700 11px "Inter", system-ui, sans-serif';
+      ctx.font = `700 ${Math.round(11 * S)}px "Inter", system-ui, sans-serif`;
       ctx.fillStyle = COL.blocked;
       ctx.textAlign = 'left';
       ctx.fillText(t('readout.blocked'), x + padX, ry + noteH / 2);
@@ -360,7 +364,7 @@ export function makeOverlays({ camera }) {
    * `circleDial` in `survey/readout.js` decides every bearing here; this
    * function only turns degrees into pixels.
    */
-  function drawDial(ctx, cx, cy, r, dial, blocked) {
+  function drawDial(ctx, cx, cy, r, dial, blocked, S = 1) {
     // Bearing to canvas radians. Screen-up is north on the map and on this dial
     // alike, because the camera never rotates and `circleDial` works in
     // azimuths — so the two pictures agree by construction.
@@ -381,16 +385,16 @@ export function makeOverlays({ camera }) {
 
     // The circle, with a graduation every 30 degrees.
     ctx.strokeStyle = COL.inkSoft;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 1.5 * S;
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.stroke();
 
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1 * S;
     ctx.globalAlpha = 0.45;
     ctx.beginPath();
     for (let a = 0; a < 360; a += 30) {
-      const p0 = ray(a, r - (a % 90 === 0 ? 6 : 3));
+      const p0 = ray(a, r - (a % 90 === 0 ? 6 * S : 3 * S));
       const p1 = ray(a, r);
       ctx.moveTo(p0.x, p0.y);
       ctx.lineTo(p1.x, p1.y);
@@ -400,16 +404,16 @@ export function makeOverlays({ camera }) {
 
     // North, as the same arrowhead the map uses, just smaller.
     const nOut = ray(dial.north, r);
-    const nIn = ray(dial.north, r - 9);
+    const nIn = ray(dial.north, r - 9 * S);
     ctx.strokeStyle = COL.ink;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2 * S;
     ctx.beginPath();
     ctx.moveTo(nIn.x, nIn.y);
     ctx.lineTo(nOut.x, nOut.y);
     ctx.stroke();
-    const nLabel = ray(dial.north, r + 9);
+    const nLabel = ray(dial.north, r + 9 * S);
     ctx.fillStyle = COL.ink;
-    ctx.font = '700 10px "Inter", system-ui, sans-serif';
+    ctx.font = `700 ${Math.round(10 * S)}px "Inter", system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('N', nLabel.x, nLabel.y);
@@ -418,8 +422,8 @@ export function makeOverlays({ camera }) {
     if (dial.backsight != null) {
       const b = ray(dial.backsight, r);
       ctx.strokeStyle = COL.sight;
-      ctx.lineWidth = 1.8;
-      ctx.setLineDash([4, 3]);
+      ctx.lineWidth = 1.8 * S;
+      ctx.setLineDash([4 * S, 3 * S]);
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.lineTo(b.x, b.y);
@@ -431,7 +435,7 @@ export function makeOverlays({ camera }) {
     // line on the map behaves.
     const tp = ray(dial.target, r);
     ctx.strokeStyle = blocked ? COL.blocked : COL.sight;
-    ctx.lineWidth = 2.2;
+    ctx.lineWidth = 2.2 * S;
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.lineTo(tp.x, tp.y);
@@ -439,7 +443,7 @@ export function makeOverlays({ camera }) {
 
     ctx.fillStyle = COL.panelEdge;
     ctx.beginPath();
-    ctx.arc(cx, cy, 2.4, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 2.4 * S, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }

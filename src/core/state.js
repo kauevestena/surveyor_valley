@@ -214,6 +214,18 @@ export function makeStore(initial = makeInitialState()) {
       return seconds;
     },
 
+    /**
+     * The cost of walking off an unfinished job. Capped at what the player
+     * actually has, so switching jobs can never leave them in debt.
+     * @returns {number} the amount actually charged
+     */
+    chargeJobSwitchPenalty(amount) {
+      const applied = Math.min(amount, state.player.money);
+      state.player.money -= applied;
+      notify('money');
+      return applied;
+    },
+
     addControlPoint(cp) {
       state.network.push(cp);
       notify('network');

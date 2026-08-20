@@ -35,10 +35,12 @@ export function tree(rng, variant = 0, size = 1) {
 
   contactShadow(pix, cx, baseY - 1, 24 * k, 7 * k);
 
-  // Trunk, leaning a little so a windbreak does not look like a fence.
+  // Trunk: short and stubby, because the canopy above is about to be wide
+  // enough that a tall one reads as a flagpole. Most of it is hidden under
+  // the lowest canopy lobes anyway — what shows is a thick stump, not a stem.
   const lean = rng.range(-3, 3) * k;
-  const trunkTop = Math.round(46 * k);
-  const halfW = rng.range(3.2, 4.6) * k;
+  const trunkTop = Math.round(58 * k);
+  const halfW = rng.range(4.2, 5.8) * k;
   for (let y = trunkTop; y <= baseY; y++) {
     const t = (y - trunkTop) / (baseY - trunkTop);
     // Flares out at the root.
@@ -51,18 +53,34 @@ export function tree(rng, variant = 0, size = 1) {
 
   // A couple of bark ticks, enough to read as texture at 1x.
   for (let i = 0; i < 3; i++) {
-    const y = Math.round(rng.range(trunkTop + 6 * k, baseY - 6 * k));
+    const y = Math.round(rng.range(trunkTop + 4 * k, baseY - 4 * k));
     pix.hline(cx - 2, cx + 1, y, P.trunk[0]);
   }
 
-  // Canopy: a dark mass, a mid mass, then a highlight catching the light.
-  const cy = 40 * k;
-  const rx = rng.range(28, 33) * k;
-  const ry = rng.range(24, 29) * k;
+  // Canopy: not one blended mass but a cluster of round poofs — a base mass
+  // to keep the silhouette gap-free, a hard shadow lobe on the lower right,
+  // several separate mid-tone lobes around the ring, and one small bright
+  // lobe catching the light on the upper left. That last one is doing most of
+  // the work: a single well-placed highlight reads as "glossy round leaf
+  // cluster" in a way that a soft gradient over one oval never does.
+  const cy = 44 * k;
+  const rx = rng.range(27, 32) * k;
+  const ry = rng.range(23, 28) * k;
 
-  pix.blob(cx + 3 * k, cy + 4 * k, rx, ry, leaf[0], rng, { wobble: 0.2, lobes: 3 });
-  pix.blob(cx, cy, rx * 0.94, ry * 0.94, leaf[1], rng, { wobble: 0.24, lobes: 4 });
-  pix.blob(cx - 6 * k, cy - 7 * k, rx * 0.6, ry * 0.55, leaf[2], rng, { wobble: 0.3, lobes: 3 });
+  pix.blob(cx, cy, rx, ry, leaf[0], rng, { wobble: 0.22, lobes: 4 });
+  pix.blob(cx + rx * 0.38, cy + ry * 0.42, rx * 0.56, ry * 0.5, leaf[0], rng, { wobble: 0.3, lobes: 5 });
+
+  const lobeAngles = [-2.35, -0.75, 0.55, 1.95];
+  for (const a of lobeAngles) {
+    const d = rng.range(0.55, 0.75);
+    const lr = rng.range(0.36, 0.47);
+    pix.blob(cx + Math.cos(a) * rx * d, cy + Math.sin(a) * ry * d, rx * lr, ry * lr * 0.92, leaf[1], rng, {
+      wobble: 0.32,
+      lobes: 6,
+    });
+  }
+
+  pix.blob(cx - rx * 0.32, cy - ry * 0.4, rx * 0.34, ry * 0.3, leaf[2], rng, { wobble: 0.26, lobes: 5 });
 
   // Leaf clusters: small dark notches read as gaps between boughs.
   for (let i = 0; i < 7; i++) {

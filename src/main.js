@@ -54,6 +54,7 @@ import { renderCalculos } from './ui/calculos.js';
 import { showStationDialog } from './ui/stationdialog.js';
 import { showParcelPicker, showCampaignEnd } from './ui/parcelpicker.js';
 import { showShop } from './ui/shop.js';
+import { JOB_SWITCH_PENALTY } from './game/economy.js';
 import { el } from './ui/dom.js';
 
 import { buildPlanta, buildPlantaTables } from './report/planta.js';
@@ -212,6 +213,10 @@ function buildView(alpha = 1) {
     assistant: interpolatedAssistant(assistant, alpha),
     activeParcelId: svc?.parcelId ?? null,
     corners: cornerStates(),
+    // Every target ever measured this session, not just this parcel's — so a
+    // marker the player already shot stays visibly marked while they roam,
+    // rather than only while its own parcel happens to be active.
+    surveyed: new Set(service.surveyedPoints().map((p) => p.id)),
     safeArea,
     station: setup,
     setups: svc?.setups ?? [],
@@ -1379,12 +1384,20 @@ function nextJob() {
     });
   }
 
+  const activeSvc = s.activeService;
+  const hasActiveJob = Boolean(activeSvc && !activeSvc.completed);
+
   return showParcelPicker({
     modals,
     parcels: world.parcels,
     state: s,
     difficulty: store.difficulty(),
-    dismissible: false,
+    // A job in progress is a reason to browse, not a cage: only a player with
+    // nothing underway yet is required to pick before doing anything else.
+    dismissible: hasActiveJob,
+    activeParcelId: hasActiveJob ? activeSvc.parcelId : null,
+    playerPos: player ? { e: player.e, n: player.n } : null,
+    surveyedIds: new Set(service.surveyedPoints().map((p) => p.id)),
     onChoose: startParcel,
   });
 }
@@ -1396,6 +1409,14 @@ function nextJob() {
 function startParcel(parcelId) {
   const parcel = world.parcelById.get(parcelId);
   if (!parcel) return;
+
+  const active = store.get().activeService;
+  if (active && !active.completed && active.parcelId !== parcelId) {
+    const charged = store.chargeJobSwitchPenalty(JOB_SWITCH_PENALTY);
+    if (charged > 0) {
+      bus.emit(EV.NOTIFY, { kind: 'warn', key: 'picker.switchPenaltyApplied', params: { amount: charged } });
+    }
+  }
 
   service.start(parcelId);
   const spawn = world.spawnPointFor(parcel);

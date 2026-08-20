@@ -21,6 +21,14 @@ import { KIND } from '../world/entities.js';
 import { SIZES } from './sprites/nature.js';
 import { pixi } from './pixi.js';
 
+/**
+ * A previously-measured survey target, tinted gold — the same job as the
+ * plan-view's orange→yellow "surveyed" swap, so the colour means the same
+ * thing in both views. Flat, no pulse: a memory aid should sit still.
+ */
+const TINT_SURVEYED = 0xffd23f;
+const TINT_NONE = 0xffffff;
+
 /** Which painted size bucket an entity's continuous scale belongs in. */
 function sizeBucket(scale = 1) {
   let best = 0;
@@ -271,7 +279,7 @@ export function makeScene({ app, camera, atlas, ground }) {
     return `${ent.look || 'owner-m0'}-${dir}-${breath ? 'idle' : '0'}`;
   }
 
-  function drawEntities(w, playerState, station, assistantState, now) {
+  function drawEntities(w, playerState, station, assistantState, now, surveyed) {
     const detail = camera.zoom >= DETAIL_ZOOM;
     const view = camera.viewRect(12);
     visible.length = 0;
@@ -294,7 +302,12 @@ export function makeScene({ app, camera, atlas, ground }) {
       const key = ent.kind === KIND.MORADOR ? residentKey(ent, playerState, now) : spriteKeyFor(ent);
       const frame = key && atlas.get(key);
       if (!frame) continue;
-      place(takeEntitySprite(), frame, ent.e, ent.n);
+      const sp = takeEntitySprite();
+      place(sp, frame, ent.e, ent.n);
+      // Sprites are pooled, so the tint must be reset every frame — otherwise
+      // a marker's gold glow leaks onto whatever unrelated entity reuses its
+      // sprite next.
+      sp.tint = ent.targetable && surveyed?.has(ent.id) ? TINT_SURVEYED : TINT_NONE;
     }
 
     // The instrument, when one is set up, and the surveyor.
@@ -327,11 +340,16 @@ export function makeScene({ app, camera, atlas, ground }) {
     // Far things are drawn first, so a tree to the south overlaps one to the
     // north. That single rule is what gives a top-down scene any depth at all.
     sprite.zIndex = -n;
+    // Sprites are pooled and reused frame to frame, so a tint has to be given
+    // a default here — otherwise the station or the player could inherit the
+    // gold "already measured" glow left behind by whichever marker last held
+    // this same pooled sprite. Callers that want the tint override it after.
+    sprite.tint = TINT_NONE;
   }
 
   // ---- frame --------------------------------------------------------------
   function render(view) {
-    const { world: w, player, assistant, activeParcelId, station, light: lightState, now = 0 } = view;
+    const { world: w, player, assistant, activeParcelId, station, light: lightState, now = 0, surveyed } = view;
 
     if (!w) {
       world.visible = false;
@@ -357,7 +375,7 @@ export function makeScene({ app, camera, atlas, ground }) {
 
     drawGround(w);
     drawLines(w, activeParcelId);
-    drawEntities(w, player, station, assistant, now);
+    drawEntities(w, player, station, assistant, now, surveyed);
 
     // Light pass, in screen space.
     tint.width = camera.vw;

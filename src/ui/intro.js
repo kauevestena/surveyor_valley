@@ -321,44 +321,49 @@ export function showIntro({ modals, onStart, onContinue = null, saved = null, in
     ),
   );
 
-  const body = el(
-    'div.intro',
+  // ---- three screens, not one long scroll -----------------------------------
+  //
+  // A welcome to skim once, the choices that actually take thought, and the
+  // control reference a player wants to glance back at — split apart so each
+  // one fits a short window without a scrollbar, and the step someone is
+  // stuck on is never buried under one they already finished.
+
+  const resumeSection =
+    onContinue && saved
+      ? el(
+          'section.intro-section.intro-resume',
+          {},
+          el('h3', { 'data-i18n': 'intro.resumeTitle' }),
+          el('p', { text: t('intro.resumeSummary', { done: saved.done, money: num(saved.money, 0) }) }),
+          el('p.hint', { 'data-i18n': 'intro.resumeWarning' }),
+        )
+      : null;
+
+  const step1 = el(
+    'div.intro-step',
     {},
     // The title, properly set. The modal's own heading carries the greeting and
     // stays the accessible name of the dialog; this is the game's face, so it
     // is decorative and hidden from the reader rather than announced twice.
     el('img.intro-logo', { src: './assets/logo.svg', alt: '', 'aria-hidden': 'true' }),
     el('p.intro-tagline', { 'data-i18n': 'intro.tagline' }),
-
+    resumeSection,
     el(
       'section.intro-section',
       {},
       el('h3', { 'data-i18n': 'intro.objectiveTitle' }),
       el('p', { 'data-i18n': 'intro.objective' }),
     ),
+    el('p.disclaimer', { 'data-i18n': 'intro.disclaimer' }),
+  );
 
+  const step2 = el(
+    'div.intro-step',
+    {},
     characterSection,
-
-    el(
-      'section.intro-section',
-      {},
-      el('h3', { 'data-i18n': 'intro.controlsTitle' }),
-      el(
-        'dl.controls',
-        {},
-        CONTROLS().flatMap(([k, d]) => [el('dt', { 'data-i18n': k }), el('dd', { 'data-i18n': d })]),
-      ),
-    ),
-
     el(
       'div.intro-choices',
       {},
-      el(
-        'section.intro-section',
-        {},
-        el('h3', { 'data-i18n': 'intro.languageTitle' }),
-        langButtons,
-      ),
       el(
         'section.intro-section',
         {},
@@ -379,62 +384,134 @@ export function showIntro({ modals, onStart, onContinue = null, saved = null, in
         el('p.hint', { 'data-i18n': 'intro.seedHelp' }),
       ),
     ),
+    el('section.intro-section', {}, el('h3', { 'data-i18n': 'intro.difficultyTitle' }), difficultyButtons),
+  );
 
+  const step3 = el(
+    'div.intro-step',
+    {},
     el(
       'section.intro-section',
       {},
-      el('h3', { 'data-i18n': 'intro.difficultyTitle' }),
-      difficultyButtons,
+      el('h3', { 'data-i18n': 'intro.controlsTitle' }),
+      el(
+        'dl.controls',
+        {},
+        CONTROLS().flatMap(([k, d]) => [el('dt', { 'data-i18n': k }), el('dd', { 'data-i18n': d })]),
+      ),
     ),
-
-    el('p.disclaimer', { 'data-i18n': 'intro.disclaimer' }),
   );
 
-  // Resuming leads, when there is something to resume. The summary is there so
-  // the choice is informed: "continue" and "new game" look identical otherwise,
-  // and one of them silently throws away a campaign.
-  if (onContinue && saved) {
-    body.prepend(
-      el(
-        'section.intro-section.intro-resume',
-        {},
-        el('h3', { 'data-i18n': 'intro.resumeTitle' }),
-        el('p', {
-          text: t('intro.resumeSummary', { done: saved.done, money: num(saved.money, 0) }),
-        }),
-        el('p.hint', { 'data-i18n': 'intro.resumeWarning' }),
-      ),
-    );
-  }
+  // Fixed content, reused across steps — moving a node to a new parent keeps
+  // its state (a canvas' painted pixels, an input's value), so nothing here
+  // gets rebuilt or repainted just because the player stepped away and back.
+  const steps = [step1, step2, step3];
+  let currentStep = 1;
 
   const dialog = modals.open({
     titleKey: 'intro.title',
-    body,
+    body: el('div.intro-wizard'),
     dismissible: false,
     wide: true,
-    actions: [
-      ...(onContinue ? [{ labelKey: 'intro.resume', primary: true, onClick: () => onContinue() }] : []),
-      {
-        labelKey: onContinue ? 'intro.startNew' : 'intro.start',
-        primary: !onContinue,
-        // A name left blank falls back to a generated one rather than shipping
-        // an unsigned memorial descritivo.
-        onClick: () => onStart({ seed, difficulty, name: name.trim() || rollName(look.body), look: { ...look } }),
-      },
-    ],
+    actions: [],
   });
 
-  function rerender() {
-    applyI18n(dialog.node);
-    // Action labels live outside the translated body, so they are set by hand.
-    // There may be one button or two, depending on whether a save can resume.
-    const buttons = [...dialog.node.querySelectorAll('.modal-actions .btn')];
-    const labels = onContinue ? ['intro.resume', 'intro.startNew'] : ['intro.start'];
-    buttons.forEach((btn, i) => {
-      if (labels[i]) btn.textContent = t(labels[i]);
+  // Top-left of the title bar, not buried in step 2 — a player who can't
+  // read the language it opened in needs to find this before anything else,
+  // and the header sits outside what `setBody` swaps, so it stays put across
+  // every step without being rebuilt.
+  const modalHead = dialog.node.querySelector('.modal-head');
+  if (modalHead) {
+    modalHead.classList.add('modal-head-lang');
+    modalHead.insertBefore(langButtons, modalHead.firstChild);
+  }
+
+  function stepIndicator() {
+    return el(
+      'div.intro-steps',
+      {},
+      steps.map((_, i) => el(`span.intro-step-dot${i + 1 === currentStep ? '.is-active' : ''}`, { 'aria-hidden': 'true' })),
+      el('span.intro-step-label', { text: t('intro.step', { n: currentStep, total: steps.length }) }),
+    );
+  }
+
+  function navRow() {
+    const isLast = currentStep === steps.length;
+    const back = el('button.btn.btn-ghost', {
+      type: 'button',
+      'data-i18n': 'intro.back',
+      disabled: currentStep === 1,
+      onclick: () => {
+        currentStep = Math.max(1, currentStep - 1);
+        renderStep();
+      },
     });
+
+    const forward = [];
+    if (!isLast) {
+      forward.push(
+        el('button.btn.btn-primary', {
+          type: 'button',
+          'data-i18n': 'intro.next',
+          onclick: () => {
+            currentStep = Math.min(steps.length, currentStep + 1);
+            renderStep();
+          },
+        }),
+      );
+    } else {
+      if (onContinue) {
+        forward.push(
+          el('button.btn.btn-primary', {
+            type: 'button',
+            'data-i18n': 'intro.resume',
+            onclick: () => {
+              dialog.close();
+              onContinue();
+            },
+          }),
+        );
+      }
+      forward.push(
+        el(`button.btn${onContinue ? '' : '.btn-primary'}`, {
+          type: 'button',
+          'data-i18n': onContinue ? 'intro.startNew' : 'intro.start',
+          onclick: () => {
+            dialog.close();
+            // A name left blank falls back to a generated one rather than
+            // shipping an unsigned memorial descritivo.
+            onStart({ seed, difficulty, name: name.trim() || rollName(look.body), look: { ...look } });
+          },
+        }),
+      );
+    }
+
+    return el('div.intro-nav', {}, back, el('div.intro-nav-forward', {}, forward));
+  }
+
+  function renderStep() {
+    const wrap = el('div.intro-wizard', {}, stepIndicator(), steps[currentStep - 1], navRow());
+    // `data-i18n` nodes only pick up their text when `applyI18n` sees them —
+    // and steps 2 and 3 sit unattached between renders, so translating the
+    // dialog as a whole (as `rerender` used to) missed them entirely. Doing
+    // it here, on the tree about to be shown, is what actually reaches them.
+    applyI18n(wrap);
+    dialog.setBody(wrap);
+    // Land back at the top of the step, not wherever the previous one was
+    // scrolled to — and `preventScroll` on the focus below matters for the
+    // same reason: focusing a button at the bottom of a tall step would
+    // otherwise auto-scroll straight back past everything above it.
+    const bodyNode = dialog.node.querySelector('.modal-body');
+    if (bodyNode) bodyNode.scrollTop = 0;
+    // Send focus to the step's forward action, so Enter does the obvious
+    // thing on every step the way it did with the old single footer button.
+    wrap.querySelector('.intro-nav .btn-primary')?.focus({ preventScroll: true });
+  }
+
+  function rerender() {
     const title = dialog.node.querySelector('.modal-title');
     if (title) title.textContent = t('intro.title');
+    renderStep();
   }
 
   rerender();

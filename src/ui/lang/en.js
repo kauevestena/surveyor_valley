@@ -101,6 +101,9 @@ export default {
   'intro.seedHelp': 'The same seed grows exactly the same valley. Swap them with your classmates.',
   'intro.seedRandom': 'Random',
   'intro.start': 'Start the job',
+  'intro.step': 'Step {n} of {total}',
+  'intro.next': 'Next',
+  'intro.back': 'Back',
   'intro.objectiveTitle': 'Your first job',
   'intro.objective':
     'Set at least two monuments, put the total station over one of them oriented on the other, and survey every corner of the property. At the end you deliver the plan and the metes-and-bounds description.',
@@ -425,6 +428,10 @@ export default {
   'picker.take': 'Take the job',
   'picker.reusable': '{n} of your monuments already in the ground nearby — reusable',
   'picker.completed': 'Finished in {time} · R$ {paid}',
+  'picker.switchCost': 'Switching to this job now costs R$ {amount}',
+  'picker.switchPenaltyApplied': 'Left the job in progress — R$ {amount} switching cost',
+  'picker.nearest': 'Nearest',
+  'picker.mostReady': 'Most measured',
 
   'campaign.title': "Season's end",
   'campaign.body':

@@ -29,7 +29,7 @@ export default {
   // --------------------------------------------------------- modal inicial -
   'intro.title': 'Bem-vindo ao Surveyor Valley',
   'intro.tagline':
-    'Você é o topógrafo do vale. Seis propriedades rurais precisam de levantamento planimétrico — e os proprietários estão esperando.',
+    'Você é um topógrafo em um vale rural. Seis propriedades rurais precisam de levantamento planimétrico — e os proprietários estão esperando.',
   'intro.controlsTitle': 'Controles',
   'intro.stickKeys': 'Alavanca (canto inferior esquerdo)',
   'intro.stickDesc': 'Andar pelo terreno; empurre até o fim para correr',
@@ -99,6 +99,9 @@ export default {
   'intro.seedHelp': 'A mesma semente gera exatamente o mesmo vale. Troque com os colegas.',
   'intro.seedRandom': 'Sortear',
   'intro.start': 'Começar o serviço',
+  'intro.step': 'Passo {n} de {total}',
+  'intro.next': 'Avançar',
+  'intro.back': 'Voltar',
   'intro.objectiveTitle': 'Seu primeiro serviço',
   'intro.objective':
     'Implante ao menos dois marcos, instale a estação total sobre um deles orientando pelo outro, e levante todos os vértices da propriedade. Ao final você entrega a planta e o memorial descritivo.',
@@ -437,6 +440,10 @@ export default {
   'picker.take': 'Aceitar o serviço',
   'picker.reusable': '{n} marco(s) seu(s) já implantado(s) por perto — dá para reaproveitar',
   'picker.completed': 'Concluída em {time} · R$ {paid}',
+  'picker.switchCost': 'Trocar de serviço agora custa R$ {amount}',
+  'picker.switchPenaltyApplied': 'Serviço em andamento abandonado — custo de troca R$ {amount}',
+  'picker.nearest': 'Mais perto',
+  'picker.mostReady': 'Mais adiantada',
 
   'campaign.title': 'Fim da temporada',
   'campaign.body':
