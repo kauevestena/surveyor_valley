@@ -1,0 +1,18 @@
+# Nothing here is built, installed or generated at run time, so this file is
+# short on purpose: the repository is exactly what GitHub Pages serves.
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/*
+!.vscode/settings.json
+
+# Only ever here by accident — the game has no dependencies and no build step.
+node_modules/
+package-lock.json
+*.log
+
+# `tools/make-wordmark.py` caches the font it converts in /tmp, never in here.
+*.ttf

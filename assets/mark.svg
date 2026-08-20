@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-137.2 -137.2 505.2 505.2" width="505" height="505" role="img" aria-label="Surveyor Valley">
+  <title>Surveyor Valley</title>
+  <defs>
+    <linearGradient id="ink" x1="0" y1="-137" x2="0" y2="368" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f7ecd0"/>
+      <stop offset="0.42" stop-color="#f2c14e"/>
+      <stop offset="0.62" stop-color="#e8a730"/>
+      <stop offset="1" stop-color="#f2c14e"/>
+    </linearGradient>
+    <linearGradient id="brass" x1="0" y1="-100.0" x2="0" y2="100.0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f7e3a8"/><stop offset="1" stop-color="#c9922c"/>
+    </linearGradient>
+    <linearGradient id="wood" x1="49.3" y1="63.0" x2="178.5" y2="228.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b9834a"/><stop offset="1" stop-color="#7a5227"/>
+    </linearGradient>
+    <radialGradient id="glass" cx="0.36" cy="0.30" r="0.85">
+      <stop offset="0" stop-color="#eaf7fd"/><stop offset="0.55" stop-color="#9fdcf4"/><stop offset="1" stop-color="#4fb2dd"/>
+    </radialGradient>
+  </defs>
+  <g stroke-linejoin="round" stroke-linecap="round">
+    <line x1="49.3" y1="63.0" x2="178.5" y2="228.5" stroke="#3b2a16" stroke-width="113"/>
+    <line x1="49.3" y1="63.0" x2="178.5" y2="228.5" stroke="url(#wood)" stroke-width="68"/>
+    <line x1="78.8" y1="100.9" x2="49.3" y2="63.0" stroke="url(#brass)" stroke-width="70"/>
+    <circle cx="178.5" cy="228.5" r="40.8" fill="url(#wood)" stroke="#3b2a16" stroke-width="25"/>
+    <circle cx="0.0" cy="0.0" r="100.0" fill="url(#glass)" stroke="#3b2a16" stroke-width="25"/>
+    <circle cx="0.0" cy="0.0" r="86.0" fill="none" stroke="url(#brass)" stroke-width="28.0"/>
+    <circle cx="0.0" cy="0.0" r="72.0" fill="none" stroke="#3b2a16" stroke-width="13"/>
+    <g stroke="#ffffff" opacity="0.72">
+      <line x1="-39.6" y1="-7.2" x2="-7.2" y2="-41.8" stroke-width="18.7"/>
+      <line x1="-15.8" y1="21.6" x2="11.5" y2="-10.1" stroke-width="9.4"/>
+    </g>
+  </g>
+</svg>
