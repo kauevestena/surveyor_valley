@@ -57,45 +57,60 @@ export function tree(rng, variant = 0, size = 1) {
     pix.hline(cx - 2, cx + 1, y, P.trunk[0]);
   }
 
-  // Canopy: not one blended mass but a cluster of round poofs — a base mass
-  // to keep the silhouette gap-free, a hard shadow lobe on the lower right,
-  // several separate mid-tone lobes around the ring, and one small bright
-  // lobe catching the light on the upper left. That last one is doing most of
-  // the work: a single well-placed highlight reads as "glossy round leaf
-  // cluster" in a way that a soft gradient over one oval never does.
-  const cy = 44 * k;
-  const rx = rng.range(27, 32) * k;
-  const ry = rng.range(23, 28) * k;
+  // Canopy: built from leaf clusters, not shaded regions. Every earlier pass
+  // at this used a handful of big blobs to fake a round, shaded mass — and
+  // every one of them showed the same failure once actually rendered: a flat
+  // colour fill has a hard edge with no antialiasing, so a BIG region of it
+  // reads as a seam cutting across the canopy, not as shading. Small regions
+  // don't have that problem — a hard edge around something leaf-sized reads
+  // as the leaf's own outline. So the whole canopy is packed, ring by ring
+  // from the centre out, with three-ish dozen small round leaf clusters
+  // instead of a few big lobes. Density (rings overlapping their neighbours)
+  // keeps the mass solid; each ring's blobs shrink toward the rim, which is
+  // what gives the silhouette its scalloped, leafy edge for free.
+  const cy = 42 * k;
+  const rx = rng.range(29, 34) * k;
+  const ry = rng.range(25, 30) * k;
+  // Unit vector the light comes FROM; a cluster's alignment with it decides
+  // whether that cluster sits on the lit or the shadowed side of the canopy.
+  const lightX = -0.7;
+  const lightY = -0.7;
 
-  pix.blob(cx, cy, rx, ry, leaf[0], rng, { wobble: 0.22, lobes: 4 });
-  pix.blob(cx + rx * 0.38, cy + ry * 0.42, rx * 0.56, ry * 0.5, leaf[0], rng, { wobble: 0.3, lobes: 5 });
-
-  const lobeAngles = [-2.35, -0.75, 0.55, 1.95];
-  for (const a of lobeAngles) {
-    const d = rng.range(0.55, 0.75);
-    const lr = rng.range(0.36, 0.47);
-    pix.blob(cx + Math.cos(a) * rx * d, cy + Math.sin(a) * ry * d, rx * lr, ry * lr * 0.92, leaf[1], rng, {
-      wobble: 0.32,
-      lobes: 6,
-    });
+  // Each cluster's tone is a WEIGHTED COIN FLIP biased by light direction,
+  // not a threshold on it. A threshold draws one clean line and produces
+  // exactly the two-big-regions look this replaced; a biased flip means the
+  // lit side is MOSTLY light clusters with dark ones mixed in and vice
+  // versa, so neighbouring clusters keep disagreeing with each other — which
+  // is what actually reads as individual leaves catching the light
+  // differently, rather than two smooth-edged patches of colour.
+  function leafTone(dx, dy) {
+    const bias = dx * lightX + dy * lightY; // roughly -1 (shadow) .. 1 (lit)
+    const pLight = Math.max(0.06, Math.min(0.72, 0.32 + bias * 0.34));
+    const pDark = Math.max(0.06, Math.min(0.72, 0.32 - bias * 0.34));
+    const roll = rng.range(0, 1);
+    if (roll < pLight) return leaf[2];
+    if (roll < pLight + pDark) return leaf[0];
+    return leaf[1];
   }
 
-  pix.blob(cx - rx * 0.32, cy - ry * 0.4, rx * 0.34, ry * 0.3, leaf[2], rng, { wobble: 0.26, lobes: 5 });
+  const rings = [
+    { rFrac: 0, count: 1, size: [8, 10] },
+    { rFrac: 0.26, count: 6, size: [6.5, 8.5] },
+    { rFrac: 0.48, count: 8, size: [6, 8] },
+    { rFrac: 0.68, count: 11, size: [5.5, 7.5] },
+    { rFrac: 0.85, count: 13, size: [5, 6.5] },
+    { rFrac: 0.99, count: 15, size: [4, 5.5] },
+  ];
 
-  // Leaf clusters: small dark notches read as gaps between boughs.
-  for (let i = 0; i < 7; i++) {
-    const a = rng.range(0, Math.PI * 2);
-    const d = rng.range(0.35, 0.9);
-    pix.blob(cx + Math.cos(a) * rx * d, cy + Math.sin(a) * ry * d, rng.range(3, 6) * k, rng.range(3, 5) * k, leaf[0], rng, {
-      wobble: 0.35,
-    });
-  }
-  for (let i = 0; i < 5; i++) {
-    const a = rng.range(Math.PI * 0.9, Math.PI * 1.9);
-    const d = rng.range(0.3, 0.7);
-    pix.blob(cx + Math.cos(a) * rx * d, cy + Math.sin(a) * ry * d, rng.range(2, 5) * k, rng.range(2, 4) * k, leaf[2], rng, {
-      wobble: 0.4,
-    });
+  for (const ring of rings) {
+    for (let i = 0; i < ring.count; i++) {
+      const a = (i / ring.count) * Math.PI * 2 + rng.range(-0.35, 0.35);
+      const r = ring.rFrac + rng.range(-0.04, 0.04);
+      const dx = Math.cos(a) * r;
+      const dy = Math.sin(a) * r;
+      const s = rng.range(ring.size[0], ring.size[1]) * k;
+      pix.blob(cx + dx * rx, cy + dy * ry, s, s * 0.88, leafTone(dx, dy), rng, { wobble: 0.32, lobes: 3 });
+    }
   }
 
   pix.outline('auto', { amount: 0.42 });
