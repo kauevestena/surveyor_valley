@@ -13,7 +13,7 @@
 // Bump CACHE_VERSION whenever the file list or the Pixi pin changes; old caches
 // are deleted on activate.
 
-const CACHE_VERSION = 'sv-v7';
+const CACHE_VERSION = 'sv-v8';
 const PIXI_URL = 'https://cdn.jsdelivr.net/npm/pixi.js@8.19.0/dist/pixi.min.mjs';
 
 /**
