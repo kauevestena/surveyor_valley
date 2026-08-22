@@ -256,6 +256,16 @@ export function makeAudio() {
       tone({ freq: semi(16), type: 'sine', gain: 0.1, decay: 0.3, delay: 0.05 });
     },
 
+    /**
+     * A buried corner turning up. Distinct from `chime()`: this is a discovery,
+     * not a measurement — a rising sparkle rather than a bright confirmation.
+     */
+    reveal() {
+      tone({ freq: semi(3), type: 'triangle', gain: 0.1, decay: 0.18 });
+      tone({ freq: semi(10), type: 'triangle', gain: 0.09, decay: 0.28, delay: 0.06 });
+      noise({ cut: 4200, q: 2.5, gain: 0.035, decay: 0.08 });
+    },
+
     /** The instrument being levelled and set up. */
     setup() {
       noise({ cut: 3200, q: 4, gain: 0.05, decay: 0.12 });

@@ -297,6 +297,30 @@ test('a corner found before a reload is still found after it', () => {
   assert.equal(after.entity(buriedId).hidden, false, 'the walk has to be remembered');
 });
 
+test('a save failure is reported through onSaveFailure rather than only console.warn', () => {
+  // A quota-exceeded or disabled backend must not fail silently: something has
+  // to be able to warn the player, since a reload afterwards comes back with
+  // nothing to show for it. Storage itself only reports the failure — showing
+  // it once per session, rather than on every write, is UI policy that lives
+  // in main.js, not here.
+  let calls = 0;
+  const throwingBackend = {
+    getItem: () => null,
+    setItem: () => {
+      throw new Error('quota exceeded');
+    },
+    removeItem: () => {},
+  };
+  const storage = makeStorage(throwingBackend);
+  storage.onSaveFailure(() => calls++);
+
+  assert.equal(storage.saveNow({ any: 'thing' }), false, 'the write itself still reports failure');
+  assert.equal(calls, 1);
+
+  storage.saveNow({ any: 'thing' });
+  assert.equal(calls, 2, 'every failed write is reported; de-duplication is the caller\'s job');
+});
+
 test('a compensated survey comes back compensated', () => {
   // The adjustment lives on the observations, and `rehydrate` rebuilds the
   // reduction cache through `reducedPoints` — so this is really asserting that

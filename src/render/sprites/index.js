@@ -143,4 +143,4 @@ export function buildGroundSprites() {
   };
 }
 
-export { building } from './built.js';
+export { building, BUILDING_VARIANTS } from './built.js';

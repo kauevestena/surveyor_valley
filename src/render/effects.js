@@ -252,6 +252,24 @@ export function makeEffects({ PIXI, atlas, container, camera }) {
       }
     },
 
+    /**
+     * A buried corner turning up: a slow upward scatter, distinct from `ping`'s
+     * outward ring (a measurement) and `thunk`'s dirt puff (a monument driven
+     * in) — this one is neither, it is evidence found in the scrub.
+     */
+    found(e, n) {
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2 + Math.random() * 0.4;
+        spawn(sparkTex, e, n, {
+          ve: Math.cos(a) * 0.6,
+          vn: Math.sin(a) * 0.6 + 0.9,
+          ttl: 0.6,
+          drag: 1.6,
+          grow: -0.2,
+        });
+      }
+    },
+
     /** A refusal: a small dark scatter, so a rejected click is never silent. */
     reject(e, n) {
       for (let i = 0; i < 5; i++) {

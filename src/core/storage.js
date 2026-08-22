@@ -38,6 +38,7 @@ function defaultBackend() {
 
 export function makeStorage(backend = defaultBackend()) {
   let saveTimer = null;
+  let onWriteFailed = null;
 
   function readJSON(key, fallback = null) {
     try {
@@ -55,8 +56,10 @@ export function makeStorage(backend = defaultBackend()) {
       return true;
     } catch (err) {
       // Quota exceeded, or storage disabled entirely. Not fatal: the game keeps
-      // playing, the player just loses persistence.
+      // playing, the player just loses persistence — but that is worth telling
+      // the player, not just the console, so a registered hook hears about it too.
       console.warn('[storage] write failed for', key, err);
+      onWriteFailed?.(err);
       return false;
     }
   }
@@ -181,6 +184,11 @@ export function makeStorage(backend = defaultBackend()) {
 
     getSettings: () => readJSON(KEYS.SETTINGS, null),
     setSettings: (s) => writeJSON(KEYS.SETTINGS, s),
+
+    /** Register a callback for every write failure (quota exceeded, storage disabled). */
+    onSaveFailure(fn) {
+      onWriteFailed = fn;
+    },
   };
 }
 

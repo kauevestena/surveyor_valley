@@ -475,6 +475,7 @@ export default {
   'intro.resume': 'Continue',
   'intro.startNew': 'New game',
   'save.restoreFailed': 'The saved game could not be resumed. Starting a new one.',
+  'save.writeFailed': 'Your progress could not be saved on this device (storage is full or disabled). Keep playing, but consider that this session may not be here next time.',
 
   'hud.sound': 'Sound',
 

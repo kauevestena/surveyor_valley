@@ -13,7 +13,7 @@
 // Bump CACHE_VERSION whenever the file list or the Pixi pin changes; old caches
 // are deleted on activate.
 
-const CACHE_VERSION = 'sv-v8';
+const CACHE_VERSION = 'sv-v9';
 const PIXI_URL = 'https://cdn.jsdelivr.net/npm/pixi.js@8.19.0/dist/pixi.min.mjs';
 
 /**
@@ -52,6 +52,7 @@ const CORE = [
   './src/game/player.js',
   './src/game/service.js',
   './src/game/tools.js',
+  './src/game/traverseLoop.js',
   './src/game/tutorial.js',
   './src/main.js',
   './src/render/atlas.js',

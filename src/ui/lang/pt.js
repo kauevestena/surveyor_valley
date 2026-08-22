@@ -487,6 +487,7 @@ export default {
   'intro.resume': 'Continuar',
   'intro.startNew': 'Jogo novo',
   'save.restoreFailed': 'Não foi possível retomar o jogo salvo. Começando um novo.',
+  'save.writeFailed': 'Não foi possível salvar seu progresso neste dispositivo (armazenamento cheio ou desativado). Continue jogando, mas esta sessão pode não estar aqui da próxima vez.',
 
   'hud.sound': 'Som',
 
