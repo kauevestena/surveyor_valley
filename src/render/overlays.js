@@ -247,7 +247,12 @@ export function makeOverlays({ camera }) {
     // decimal point at a pt-BR reader.
     const r = aimReadout(station, target.e, target.n);
     const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    label(ctx, `${fmtMetres(r.distance, lang)} · ${fmtAngle(r.azimuth)}`, mid.x, mid.y - 14, { size: 12, bold: true });
+    // The horizontal angle the equipment actually measures — from the
+    // backsight when one is set, or the raw circle reading on a free
+    // station where there is no ré to measure from. Not the azimuth,
+    // which is a reduction (`Hz + θ0`) the instrument never shows.
+    const hAngle = r.fromBacksight != null ? r.fromBacksight : r.hz;
+    label(ctx, `${fmtMetres(r.distance, lang)} · ${fmtAngle(hAngle)}`, mid.x, mid.y - 14, { size: 12, bold: true });
     if (target.label) label(ctx, target.label, b.x, b.y - 26, { size: 12 });
   }
 
