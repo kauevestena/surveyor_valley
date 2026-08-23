@@ -1008,6 +1008,14 @@
   font-weight: 800;
   color: var(--gold);
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+  display: inline-block;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+
+/* Counting up (or down) to a new total, rather than snapping to it. */
+.hud-money-up {
+  color: #fff3c4;
+  transform: scale(1.12);
 }
 
 /* ------------------------------------------------------------- job board -- */

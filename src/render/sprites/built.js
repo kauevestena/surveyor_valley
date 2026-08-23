@@ -13,7 +13,21 @@ import { makePix, contactShadow, P, shadeOf } from './shared.js';
 import { PX_PER_M } from '../pixbuf.js';
 
 /**
- * A farmhouse or shed.
+ * One row per archetype. The roof and the chimney used to be two independent
+ * `variant % 2` checks — which meant widening the variant count would just
+ * repeat an existing look (variant 2 would get the same roof+chimney combo as
+ * variant 0) rather than produce a new one. A single table keeps every trait
+ * of a look together.
+ */
+const VARIANTS = [
+  { roof: 'roof', chimney: true, wallTone: 'wall', wallShadeTone: 'wallShade' }, // 0: terracotta house
+  { roof: 'roofZinc', chimney: false, wallTone: 'wall', wallShadeTone: 'wallShade' }, // 1: zinc shed
+  { roof: 'roof', chimney: false, wallTone: 'wood', wallShadeTone: 'woodDark' }, // 2: barn
+];
+export const BUILDING_VARIANTS = VARIANTS.length;
+
+/**
+ * A farmhouse, shed or barn.
  * @param {object} rng
  * @param {{wm:number, hm:number, variant?:number}} p  footprint in metres
  * @returns {{pix:object, anchorX:number, anchorY:number}}  anchored on the
@@ -36,16 +50,18 @@ export function building(rng, { wm, hm, variant = 0 }) {
   const wallTop = roofBot + 1;
   const wallBot = wallTop + wallPx - 1;
 
-  // A house gets terracotta, a shed gets zinc. Reaching for the neutral rock
-  // ramp for the second one made every barn look like a concrete bunker.
-  const roof = variant % 2 === 0 ? P.roof : P.roofZinc;
+  const v = VARIANTS[variant % VARIANTS.length];
+  const roof = P[v.roof];
+  const wallBase = P[v.wallTone];
+  const wallShade = P[v.wallShadeTone];
+  const isBarn = v.wallTone === 'wood';
 
   contactShadow(pix, W / 2, wallBot + 1, fw * 0.5, 4);
 
   // ---- front wall ---------------------------------------------------------
-  pix.fill(left + 2, wallTop, fw - 4, wallPx, P.wall[1]);
-  pix.hline(left + 2, right - 2, wallBot, P.wallShade[0]);
-  pix.vline(right - 2, wallTop, wallBot, P.wallShade[1]);
+  pix.fill(left + 2, wallTop, fw - 4, wallPx, wallBase[1]);
+  pix.hline(left + 2, right - 2, wallBot, wallShade[0]);
+  pix.vline(right - 2, wallTop, wallBot, wallShade[1]);
 
   // Door, centred, and a window either side if there is room.
   const dx = Math.round(W / 2);
@@ -54,7 +70,15 @@ export function building(rng, { wm, hm, variant = 0 }) {
   pix.vline(dx - Math.floor(doorW / 2), wallBot - wallPx + 4, wallBot, P.woodDark[2]);
   pix.px(dx + 1, wallBot - Math.round(wallPx / 2), P.instrumentTrim[1]);
 
-  if (fw > 70) {
+  if (isBarn) {
+    // A single hayloft opening high on the gable, in place of windows: a barn
+    // is loaded from above, not looked into.
+    const loftW = 9;
+    const loftX = dx - Math.floor(loftW / 2);
+    const loftY = wallTop + 3;
+    pix.fill(loftX, loftY, loftW, 6, P.woodDark[2]);
+    pix.rect(loftX, loftY, loftW, 6, P.woodDark[0]);
+  } else if (fw > 70) {
     for (const wx of [left + Math.round(fw * 0.2), left + Math.round(fw * 0.78)]) {
       pix.fill(wx - 4, wallTop + 4, 8, 7, P.lens[0]);
       pix.fill(wx - 3, wallTop + 5, 6, 5, P.lens[1]);
@@ -102,10 +126,10 @@ export function building(rng, { wm, hm, variant = 0 }) {
   pix.vline(W - 1, roofTop, roofBot, shadeRoof);
 
   // Eave shadow on the wall, which is what makes the roof sit ON the building.
-  pix.fill(left + 2, wallTop, fw - 4, 2, P.wallShade[0], 0.55);
+  pix.fill(left + 2, wallTop, fw - 4, 2, wallShade[0], 0.55);
 
   // Chimney, on the houses.
-  if (variant % 2 === 0) {
+  if (v.chimney) {
     const chx = left + Math.round(fw * 0.72);
     pix.fill(chx, roofTop - 3, 6, 9, P.rock[1]);
     pix.hline(chx, chx + 5, roofTop - 3, P.rock[2]);

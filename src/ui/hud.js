@@ -164,6 +164,34 @@ export function makeHud(root, { onShop, onJobs, onBatch, onToggleSetting, onChec
 
   const byId = (id) => bar.querySelector(`#${id}`);
 
+  /**
+   * The purse, tweened rather than snapped.
+   *
+   * `update()` fires on every state change, most of which do not touch money at
+   * all — so the tween only starts when the value actually moved, and a payment
+   * arriving mid-tween restarts it from wherever the animation currently is
+   * rather than stacking a second `requestAnimationFrame` loop on top.
+   */
+  let lastMoney = null;
+  let moneyRaf = null;
+  function animateMoney(node, from, to, ms = 500) {
+    if (moneyRaf) cancelAnimationFrame(moneyRaf);
+    const start = performance.now();
+    node.classList.add('hud-money-up');
+    const step = (now) => {
+      const k = Math.min(1, (now - start) / ms);
+      const eased = 1 - Math.pow(1 - k, 3);
+      node.textContent = num(from + (to - from) * eased, 0);
+      if (k < 1) {
+        moneyRaf = requestAnimationFrame(step);
+      } else {
+        moneyRaf = null;
+        node.classList.remove('hud-money-up');
+      }
+    };
+    moneyRaf = requestAnimationFrame(step);
+  }
+
   return {
     update(view) {
       const { parcel, service, station, progress, inventory, difficulty, money = 0 } = view;
@@ -171,7 +199,13 @@ export function makeHud(root, { onShop, onJobs, onBatch, onToggleSetting, onChec
       byId('hud-property').textContent = parcel ? `${parcel.propertyName} — ${parcel.owner}` : t('common.none');
       byId('hud-clock').textContent = clockFor(service?.elapsedMs ?? 0);
       byId('hud-elapsed').textContent = service ? fmtDuration(service.elapsedMs) : '0:00';
-      byId('hud-money').textContent = num(money, 0);
+      const moneyNode = byId('hud-money');
+      if (lastMoney == null || money === lastMoney) {
+        moneyNode.textContent = num(money, 0);
+      } else {
+        animateMoney(moneyNode, lastMoney, money);
+      }
+      lastMoney = money;
       byId('hud-station').textContent = station
         ? station.mode === 'free'
           ? t('caderneta.freeStation')

@@ -20,7 +20,7 @@ import { makeScene } from './render/scene.js';
 import { makeDisplay } from './render/display.js';
 import { makePlanView } from './render/planview.js';
 import { makeEffects } from './render/effects.js';
-import { building } from './render/sprites/index.js';
+import { building, BUILDING_VARIANTS } from './render/sprites/index.js';
 import { lightAt, LIGEIRINHO_LOOK, ownerLook } from './render/palette.js';
 import { pixi } from './render/pixi.js';
 import { makeAudio } from './audio/audio.js';
@@ -111,6 +111,16 @@ let builtLook = null;
 
 const modals = makeModalHost(root);
 const notifier = makeNotifier(root);
+
+// A failed autosave is otherwise silent: the game keeps playing and the
+// player only finds out when a reload comes back empty. Once per session is
+// enough to warn without nagging on every subsequent write.
+let saveFailureBannerShown = false;
+storage.onSaveFailure(() => {
+  if (saveFailureBannerShown) return;
+  saveFailureBannerShown = true;
+  notifier.setBanner(t('save.writeFailed'), 'warn');
+});
 
 const service = makeService({
   store,
@@ -458,8 +468,11 @@ function findBoundaryMarks() {
   if (!found.length) return;
   const s = store.get();
   s.revealedMarks.push(...found);
+  audio.reveal();
   for (const id of found) {
-    notifier.key('notify.markFound', { label: world.entity(id)?.label || id }, 'success');
+    const m = world.entity(id);
+    notifier.key('notify.markFound', { label: m?.label || id }, 'success');
+    if (m) effects?.found(m.e ?? m.trueE, m.n ?? m.trueN);
   }
   refreshUI();
 }
@@ -474,7 +487,11 @@ function lookingAround() {
 
 function selectTool(tool) {
   const verdict = tools.activate(tool);
-  if (!verdict.ok) return verdict;
+  if (!verdict.ok) {
+    effects?.reject(player.e, player.n);
+    return verdict;
+  }
+  audio.click();
 
   // Picking up a different tool calls Ligeirinho back in — but only a tool that
   // is not the one whose errand he is running, or selecting MARCO twice would
@@ -729,6 +746,7 @@ function doSetupStation() {
 
   const needsDatum = s.network.every((cp) => cp.E == null);
 
+  audio.click();
   showStationDialog({
     modals,
     candidates,
@@ -1359,6 +1377,7 @@ const formatDetail = (d) => ({
 });
 
 function openShop() {
+  audio.click();
   return showShop({
     modals,
     store,
@@ -1369,6 +1388,7 @@ function openShop() {
 
 /** Back to the job board, or the end of the campaign if all six are done. */
 function nextJob() {
+  audio.click();
   const s = store.get();
   const remaining = world.parcels.filter((p) => s.parcels?.[p.id]?.status !== 'done');
 
@@ -1570,7 +1590,7 @@ async function prepareWorld(seed, difficulty) {
     const made = building(makeRng(seed, `casa:${ent.id}`), {
       wm: Math.max(...xs) - Math.min(...xs),
       hm: Math.max(...ys) - Math.min(...ys),
-      variant: ent.id.charCodeAt(ent.id.length - 1) % 2,
+      variant: ent.id.charCodeAt(ent.id.length - 1) % BUILDING_VARIANTS,
     });
     atlas.addDynamic(`building-${ent.id}`, made.pix, made.anchorX, made.anchorY);
   }
