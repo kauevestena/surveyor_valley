@@ -1,0 +1,100 @@
+# The checks, on every push and every pull request.
+#
+# There is nothing to install. The game has no dependencies, no build step and
+# no package.json — Node ships the test runner — so this whole workflow is a
+# checkout, a Node, and two commands. If a step here ever needs `npm install`,
+# something has gone wrong with the premise of the repository rather than with
+# the workflow.
+
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Nothing here writes to the repository, comments on anything, or publishes.
+permissions:
+  contents: read
+
+# A new push supersedes the run already in flight for the same branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: tests · node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      # Every version reports. One failing must not hide the others, which is
+      # the only reason to test a range rather than a single version.
+      fail-fast: false
+      matrix:
+        # 20 is the floor the README promises. 24 is where a student who
+        # installed Node last week actually is.
+        node: ['20', '22', '24']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # `node --test` with no argument, NOT `node --test tests/`.
+      #
+      # A bare directory stopped being expanded after Node 20: 22 and 24 both
+      # report `Cannot find module .../tests` — and they report it as a FAILING
+      # TEST rather than as a usage error, so a run that had executed nothing
+      # at all would still look like a run. Default discovery finds
+      # `tests/*.test.mjs` on all three versions, and keeps finding them if a
+      # test ever moves into a subdirectory.
+      #
+      # Node 24 defaults to the spec reporter rather than TAP. The output looks
+      # different between matrix legs; the exit code, which is what decides
+      # this job, does not.
+      - run: node --test
+
+  parse:
+    name: every shipped module parses
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Twenty-six of the eighty modules under src/ are never imported by any
+      # test — the whole of ui/, plus main.js, scene.js, overlays.js,
+      # effects.js and audio.js — because they need a DOM. Nothing stands
+      # between those files and GitHub Pages: no bundler, no type checker, not
+      # even a parse. A stray character in `ui/hud.js` ships a game that opens
+      # to a black screen, and all 243 tests still pass.
+      #
+      # This is the cheapest net that catches it, and it is the only check in
+      # the repository that looks at those files at all.
+      #
+      # `--input-type=module` is not decoration: these are ES modules in `.js`
+      # files with no package.json to say so. Without it Node reads them as
+      # CommonJS and every `export` is a syntax error on Node 20 — the module
+      # detection that would paper over that only arrived in 22.7, and relying
+      # on it would make this job quietly version-dependent.
+      - name: Parse every module as ESM
+        run: |
+          status=0
+          while IFS= read -r file; do
+            if ! output=$(node --input-type=module --check < "$file" 2>&1); then
+              # Annotated onto the file in the PR's diff. `--check` reads
+              # stdin, so its own message says `[stdin]` and names nothing.
+              echo "::error file=${file}::does not parse as an ES module"
+              echo "--- ${file}"
+              # Node's own stack through check_syntax says nothing useful; the
+              # location and the message are the whole of what a reader wants.
+              echo "${output}" | grep -vE '^[[:space:]]+at |^Node\.js v'
+              status=1
+            fi
+          done < <({ find src tools -type f \( -name '*.js' -o -name '*.mjs' \); echo sw.js; } | sort)
+          if [ "$status" -eq 0 ]; then
+            echo "every shipped module parses"
+          fi
+          exit $status

@@ -10,8 +10,13 @@ having forgotten all of it.
 ## Tests
 
 ```bash
-node --test tests/
+node --test
 ```
+
+With no argument, and not `node --test tests/`: a bare directory stopped being expanded
+after Node 20, and 22 and 24 both report `Cannot find module .../tests` as a FAILING TEST
+rather than as a usage error — so the run that executed nothing still looks like a run.
+`.github/workflows/checks.yml` runs the same command on 20, 22 and 24.
 
 No `package.json`, no install, nothing to download: Node 20 runs ESM and has a test
 runner built in. This works only because everything under `src/core/`, `src/survey/`,
@@ -53,6 +58,13 @@ memorial descritivo, without a browser.
 - `tests/offline.test.mjs` — the service worker's precache list matches the files on disk,
   the PixiJS pin, its SRI hash and the cached URL all agree, and a vendored copy of Pixi
   resolves next to the page rather than next to the module that imports it.
+Twenty-six of the eighty modules under `src/` are imported by no test at all — the whole
+of `ui/`, plus `main.js`, `scene.js`, `overlays.js`, `effects.js` and `audio.js` — because
+they need a DOM. Nothing else stands between them and GitHub Pages: no bundler, no type
+checker, not even a parse. So CI's second job parses every shipped module as ESM, which is
+the only check in the repository that looks at those files, and the only thing that would
+catch a stray character in `ui/hud.js` shipping a black screen past a green test suite.
+
 - `tests/render.test.mjs` — the art pipeline. Sprite painters are deterministic and
   outlined, the shading ramp shifts hue in the right direction for every base colour,
   ground chunks bake identically in slices as in one pass, and the camera never leaves
