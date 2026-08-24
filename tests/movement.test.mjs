@@ -12,11 +12,14 @@ import assert from 'node:assert/strict';
 import {
   makePlayer,
   updatePlayer,
+  interpolated,
   fastTravel,
   halt,
   WALK_SPEED,
   RUN_SPEED,
 } from '../src/game/player.js';
+import { makeCamera, ZOOM_LADDER } from '../src/render/camera.js';
+import { PX_PER_M } from '../src/render/pixbuf.js';
 
 const DT = 1 / 60;
 
@@ -273,4 +276,79 @@ test('fast travel arrives standing still', () => {
   assert.equal(p.n, 20);
   assert.equal(p.speed, 0);
   assert.equal(p.moving, false);
+});
+
+// ------------------------------------------------------------ on the screen ---
+
+test('the surveyor never slides backwards while walking forwards', () => {
+  // The end-to-end statement of the jitter, because none of the parts above can
+  // see it: the simulation was always smooth, and so was the camera. What the
+  // player watched was the DIFFERENCE of the two, and it was the quantization of
+  // that difference that stepped backwards.
+  //
+  // This walks a straight line east and reproduces exactly what the renderer
+  // does — camera interpolated to the frame's alpha, container offset rounded to
+  // a screen pixel, the figure placed inside it by `placeActor` — then asserts
+  // on where the sprite actually lands.
+  const world = makeWorld();
+  const CHAR_ANCHOR_PX = 12; // half of the 24 px character frame
+
+  for (const zoom of [32, 64]) {
+    const k = zoom / PX_PER_M;
+    const cam = makeCamera({ e: 50, n: 50, zoom });
+    cam.setViewport(1280, 800);
+
+    const player = makePlayer({ e: 50, n: 50 });
+    const seen = [];
+
+    // A render is not aligned to a step: rAF and the accumulator drift against
+    // each other, so sweep alpha rather than sampling it at 1 every time.
+    let alpha = 0;
+    for (let i = 0; i < 400; i++) {
+      updatePlayer(player, { e: 1, n: 0, run: false }, world, DT);
+      cam.tick(DT);
+      cam.follow(player, DT);
+
+      alpha = (alpha + 0.37) % 1;
+      cam.setAlpha(alpha);
+      const drawn = interpolated(player, alpha);
+      const off = cam.containerOffset().x;
+      seen.push(off + k * (Math.round((drawn.e * PX_PER_M - CHAR_ANCHOR_PX) * k) / k));
+    }
+
+    // Walking east, the sprite may hold or advance. One screen pixel of give is
+    // the floor for any pixel grid; anything past that is the bug returning, and
+    // it used to be a whole base pixel — four screen pixels at zoom 64.
+    for (let i = 1; i < seen.length; i++) {
+      const step = seen[i] - seen[i - 1];
+      assert.ok(step >= -1, `the surveyor slid ${-step} px backwards at zoom ${zoom}, frame ${i}`);
+    }
+
+    // And she does have to get somewhere: a test that passes by standing still
+    // is no test at all.
+    assert.ok(seen[seen.length - 1] > seen[0], 'the surveyor never moved');
+  }
+});
+
+test('the camera keeps the surveyor framed at every rung', () => {
+  // The follow was retuned along with the jitter fix, so pin what the dead zone
+  // costs: at a steady run the exponential settles a fixed distance behind, and
+  // that distance is `deadZone + speed / stiffness` — 0.7 + 7/6, a shade under
+  // 1.9 m. Worth a test because it is a REDUCTION: the old 1.2 m zone at
+  // stiffness 8 trailed by 2.08 m, so the softer zone also follows tighter.
+  const world = makeWorld();
+  for (const zoom of ZOOM_LADDER) {
+    const cam = makeCamera({ e: 50, n: 50, zoom });
+    cam.setViewport(1280, 800);
+    const player = makePlayer({ e: 50, n: 50 });
+
+    for (let i = 0; i < 400; i++) {
+      updatePlayer(player, { e: 1, n: 0.6, run: true }, world, DT);
+      cam.tick(DT);
+      cam.follow(player, DT);
+    }
+    cam.setAlpha(1);
+    const d = Math.hypot(player.e - cam.rE, player.n - cam.rN);
+    assert.ok(d < 2, `the surveyor drifted ${d.toFixed(2)} m from centre at zoom ${zoom}`);
+  }
 });

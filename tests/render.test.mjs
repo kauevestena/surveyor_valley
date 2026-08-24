@@ -561,20 +561,80 @@ test('field zoom is always an integer multiple of the art resolution', () => {
   assert.ok(ZOOM_LADDER.includes(ZOOM_DEFAULT));
 });
 
-test('the camera lands on whole art pixels however it is moved', () => {
+test('the world container always lands on a whole screen pixel', () => {
+  // The one rounding in the renderer. Every sprite is positioned relative to
+  // this, so if it is integral the whole scene shares one quantization — and if
+  // it is not, each sprite finds its own and the picture shimmers.
   const cam = makeCamera({ e: 100, n: 100 });
   cam.setViewport(1280, 800);
   cam.setBounds(BOUNDS);
 
-  const onGrid = (v) => Math.abs(v * PX_PER_M - Math.round(v * PX_PER_M)) < 1e-9;
+  const whole = (v) => Math.abs(v - Math.round(v)) < 1e-9;
 
-  cam.snapTo({ e: 123.456789, n: 87.1357 });
-  assert.ok(onGrid(cam.e) && onGrid(cam.n), 'snapTo must land on an art pixel');
-
-  for (let i = 0; i < 200; i++) {
-    cam.follow({ e: 300.371, n: 251.919 }, 1 / 60);
-    assert.ok(onGrid(cam.e) && onGrid(cam.n), `follow drifted off the pixel grid at step ${i}`);
+  for (const zoom of ZOOM_LADDER) {
+    cam.setZoom(zoom);
+    cam.snapTo({ e: 123.456789, n: 87.1357 });
+    for (let i = 0; i < 120; i++) {
+      cam.tick(1 / 60);
+      cam.follow({ e: 300.371, n: 251.919 }, 1 / 60);
+      // At every alpha, not just at the ends of a step.
+      for (const a of [0, 0.13, 0.5, 0.87, 1]) {
+        cam.setAlpha(a);
+        const off = cam.containerOffset();
+        assert.ok(whole(off.x) && whole(off.y), `container off-pixel at zoom ${zoom}, step ${i}`);
+      }
+    }
   }
+});
+
+test('the camera follow never stalls and never reverses', () => {
+  // Half of the regression test for the walking jitter. Snapping the STORED
+  // position fed the rounding error back into the follow, so an increment below
+  // half a base pixel vanished entirely: the camera held still for several steps
+  // and then jumped a whole one, and the world lurched instead of gliding.
+  const cam = makeCamera({ e: 300, n: 300, zoom: ZOOM_DEFAULT });
+  cam.setViewport(1280, 800);
+  cam.setBounds(BOUNDS);
+
+  const dt = 1 / 60;
+  const target = { e: 300, n: 300 };
+  const offsets = [];
+  for (let i = 0; i < 400; i++) {
+    target.e += 4.5 * dt; // WALK_SPEED, due east, in a straight line
+    cam.tick(dt);
+    cam.follow(target, dt);
+    cam.setAlpha(1);
+    offsets.push(cam.containerOffset().x);
+  }
+
+  // Walking east moves the world container west, monotonically.
+  for (let i = 1; i < offsets.length; i++) {
+    assert.ok(offsets[i] <= offsets[i - 1], `container reversed at frame ${i}`);
+  }
+
+  // And it must not lurch. Once up to speed the camera tracks a 4.5 m/s walk,
+  // which at zoom 32 is 144 screen px/s — a shade over two per frame. Anything
+  // larger than three is the stall-then-jump this test exists to catch.
+  const settled = offsets.slice(200);
+  for (let i = 1; i < settled.length; i++) {
+    const step = settled[i - 1] - settled[i];
+    assert.ok(step > 0, `camera stalled at frame ${200 + i}`);
+    assert.ok(step <= 3, `camera lurched ${step} px at frame ${200 + i}`);
+  }
+});
+
+test('a drag moves the camera without smearing the next frame', () => {
+  // Pan and pinch run off pointer events, outside the fixed step. If they moved
+  // `e` without moving `prevE` with it, the following frame would interpolate
+  // across the whole drag.
+  const cam = makeCamera({ e: 300, n: 300 });
+  cam.setViewport(1280, 800);
+  cam.setBounds(BOUNDS);
+
+  cam.setPosition(317.4, 288.6);
+  cam.setAlpha(0); // the start of a step: must already be where the drag put it
+  assert.equal(cam.rE, 317.4, 'a drag must not be interpolated away');
+  assert.equal(cam.rN, 288.6);
 });
 
 test('zoom steps rung to rung and stays inside the ladder', () => {

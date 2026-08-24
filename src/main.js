@@ -417,6 +417,12 @@ const loop = makeLoop({
   },
   render(alpha) {
     if (!display) return;
+    // First, before anything reads the camera. The world container, the overlay
+    // canvas and hit-testing all draw from the camera's interpolated position,
+    // and a frame in which they disagreed would show as the overlay sliding
+    // against the sprites. This is also what puts the camera on the same instant
+    // as the player, who has been interpolated all along.
+    camera.setAlpha(alpha);
     const view = buildView(alpha);
 
     // Bake ground on whatever is left of the frame, nearest chunk first. The

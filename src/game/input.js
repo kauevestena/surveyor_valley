@@ -255,9 +255,13 @@ export function makeInput({ canvas, root, camera, bus, EV, onClick, onDoubleClic
         // the art is pixel-exact only at whole multiples of 16 px/m, so a
         // continuous pinch would undo the rule the whole renderer rests on.
         const c = centroid();
-        camera.e = gesture.e - (c.x - gesture.cx) / camera.zoom;
-        camera.n = gesture.n + (c.y - gesture.cy) / camera.zoom;
-        camera.clampToBounds();
+        // `setPosition` rather than assigning `e`/`n`: this runs off pointer
+        // events, not the fixed step, so the camera's interpolation origin has
+        // to come with it or the next frame smears across the drag.
+        camera.setPosition(
+          gesture.e - (c.x - gesture.cx) / camera.zoom,
+          gesture.n + (c.y - gesture.cy) / camera.zoom,
+        );
 
         const now = spread();
         const ratio = now / gesture.spread;
@@ -360,9 +364,10 @@ export function makeInput({ canvas, root, camera, bus, EV, onClick, onDoubleClic
   });
   on(window, 'pointermove', (ev) => {
     if (!panning) return;
-    camera.e = panning.e - (ev.clientX - panning.x) / camera.zoom;
-    camera.n = panning.n + (ev.clientY - panning.y) / camera.zoom;
-    camera.clampToBounds();
+    camera.setPosition(
+      panning.e - (ev.clientX - panning.x) / camera.zoom,
+      panning.n + (ev.clientY - panning.y) / camera.zoom,
+    );
   });
   on(window, 'pointerup', () => {
     panning = null;

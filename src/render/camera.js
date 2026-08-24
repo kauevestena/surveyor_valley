@@ -11,9 +11,25 @@
 //   1. Field zoom is an INTEGER MULTIPLE of the 16 px/m art resolution. Scaling
 //      pixel art by 1.37 gives the soft mush that made the first version look
 //      like a stretched screenshot.
-//   2. The camera snaps to whole base pixels (1/16 m). Without it, everything on
-//      screen shimmers as you walk, because each sprite rounds to a different
-//      pixel from one frame to the next.
+//   2. The world CONTAINER lands on a whole screen pixel, and it is the only
+//      thing that gets rounded. Every sprite sits at a base-pixel offset inside
+//      it and the scale is an integer, so they all inherit one rounding and move
+//      together. Round per sprite against a fractional camera instead and the
+//      scene shimmers, because each one crosses its pixel on a different frame.
+//
+//      This used to be done by snapping the camera's stored position to the art
+//      grid, and that was the source of the walking jitter. Two reasons. The
+//      snap was fed back into the follow, so an increment below half a base
+//      pixel rounded away entirely and the camera held still for several steps
+//      before jumping a whole one. And the quantum was a BASE pixel — four
+//      screen pixels at zoom 64 — so the player, drawn against it, twitched
+//      backwards by four pixels at a time.
+//
+//      So the stored position stays a plain float, `setAlpha` interpolates it
+//      against the same clock the player is drawn on, and the only rounding is
+//      `containerOffset`'s, to the nearest SCREEN pixel. That is the finest
+//      quantum a pixel grid has; what is left is a one-pixel wobble, which is
+//      the floor rather than a defect.
 
 import { PX_PER_M } from './pixbuf.js';
 import { makeShake, easeInOutCubic, clamp01 } from './tween.js';
@@ -46,10 +62,6 @@ export const PLAN_MODE_ZOOM = 12;
 /** Below this, small scenery is skipped. */
 export const DETAIL_ZOOM = 14;
 
-/** One art pixel, in metres. The camera never sits between two of them. */
-const BASE = 1 / PX_PER_M;
-const snap = (v) => Math.round(v / BASE) * BASE;
-
 /** How long `fit` takes to glide to what it framed. */
 const FIT_PAN_SECONDS = 0.28;
 
@@ -62,6 +74,52 @@ export function makeCamera({ e = 320, n = 320, zoom = ZOOM_DEFAULT } = {}) {
     e,
     n,
     zoom,
+    /**
+     * Where the camera was at the start of the current fixed step, so `setAlpha`
+     * can interpolate between the two exactly as the player is interpolated. A
+     * camera advancing in 60 Hz lumps behind a player drawn at display rate is
+     * half of what made walking jitter.
+     */
+    prevE: e,
+    prevN: n,
+    /**
+     * The position this frame is DRAWN from: `e`/`n` interpolated across the
+     * current step. Written only by `setAlpha`; everything that puts pixels on
+     * the screen reads it, and nothing writes back into `e`/`n`. Deliberately
+     * NOT rounded — the rounding happens once, in `containerOffset`.
+     */
+    rE: e,
+    rN: n,
+
+    /**
+     * Fix the frame's render position. Called once at the top of `render`,
+     * before anything draws — the world container, the overlay canvas and
+     * hit-testing all read `rE`/`rN`, and they have to agree.
+     */
+    setAlpha(a) {
+      const k = Number.isFinite(a) ? Math.min(1, Math.max(0, a)) : 1;
+      cam.rE = cam.prevE + (cam.e - cam.prevE) * k;
+      cam.rN = cam.prevN + (cam.n - cam.prevN) * k;
+    },
+
+    /**
+     * Put the camera somewhere with no glide and no interpolation: `prev` moves
+     * with it, so the next frame does not smear across the jump. This is what a
+     * drag or a pinch wants — those run off pointer events, outside the fixed
+     * step, and have already been smoothed by the hand doing them.
+     */
+    setPosition(pe, pn) {
+      cam.e = pe;
+      cam.n = pn;
+      cam.clampToBounds();
+      cam.prevE = cam.e;
+      cam.prevN = cam.n;
+      // And land the render position too. A drag or a wheel zoom is followed by
+      // pointer events long before the next frame calls `setAlpha`, and
+      // `screenToWorld` answers those from `rE` — left stale, a click landing
+      // between a zoom and the next frame would hit-test against the old view.
+      cam.setAlpha(1);
+    },
     /** Viewport size in CSS pixels; set by the renderer on resize. */
     vw: 800,
     vh: 600,
@@ -81,25 +139,33 @@ export function makeCamera({ e = 320, n = 320, zoom = ZOOM_DEFAULT } = {}) {
       return cam.zoom / PX_PER_M;
     },
 
-    /** World metres -> CSS pixels. Used by the overlay canvas and hit-testing. */
+    /**
+     * World metres -> CSS pixels. Used by the overlay canvas and hit-testing.
+     *
+     * From the RENDERED position, not the stored one: a sight line drawn half a
+     * pixel off the sprite it starts at is the whole point of having one origin.
+     */
     worldToScreen(we, wn) {
       return {
-        x: cam.vw / 2 + (we - cam.e) * cam.zoom,
-        y: cam.vh / 2 - (wn - cam.n) * cam.zoom,
+        x: cam.vw / 2 + (we - cam.rE) * cam.zoom,
+        y: cam.vh / 2 - (wn - cam.rN) * cam.zoom,
       };
     },
 
     screenToWorld(sx, sy) {
       return {
-        e: cam.e + (sx - cam.vw / 2) / cam.zoom,
-        n: cam.n - (sy - cam.vh / 2) / cam.zoom,
+        e: cam.rE + (sx - cam.vw / 2) / cam.zoom,
+        n: cam.rN - (sy - cam.vh / 2) / cam.zoom,
       };
     },
 
     /**
      * Where the world container must sit, in SCREEN pixels, given that the
      * container itself is laid out in base pixels and scaled by `scale`.
-     * Comes out integral because `cam.e` is snapped and `scale` is an integer.
+     *
+     * THE rounding. Everything drawn in the world is positioned relative to this
+     * one integer, so the whole scene shares a single quantization instead of
+     * each sprite finding its own.
      */
     containerOffset() {
       // The shake is added HERE rather than to `cam.e`/`cam.n`, so it moves the
@@ -108,8 +174,8 @@ export function makeCamera({ e = 320, n = 320, zoom = ZOOM_DEFAULT } = {}) {
       // never travelled to. Rounded like everything else, or a knock would put
       // the whole world permanently between two pixels.
       return {
-        x: Math.round(cam.vw / 2 - cam.e * cam.zoom + shake.e * cam.zoom),
-        y: Math.round(cam.vh / 2 + cam.n * cam.zoom + shake.n * cam.zoom),
+        x: Math.round(cam.vw / 2 - cam.rE * cam.zoom + shake.e * cam.zoom),
+        y: Math.round(cam.vh / 2 + cam.rN * cam.zoom + shake.n * cam.zoom),
       };
     },
 
@@ -121,12 +187,16 @@ export function makeCamera({ e = 320, n = 320, zoom = ZOOM_DEFAULT } = {}) {
      * to decay, and a pan has to finish even if the player never moves.
      */
     tick(dt) {
+      // The step starts here, so this is where the frame's interpolation origin
+      // is taken from — before `follow` or a glide moves anything.
+      cam.prevE = cam.e;
+      cam.prevN = cam.n;
       shake.update(dt);
       if (pan) {
         pan.elapsed += dt;
         const k = easeInOutCubic(clamp01(pan.elapsed / pan.duration));
-        cam.e = snap(pan.fromE + (pan.toE - pan.fromE) * k);
-        cam.n = snap(pan.fromN + (pan.toN - pan.fromN) * k);
+        cam.e = pan.fromE + (pan.toE - pan.fromE) * k;
+        cam.n = pan.fromN + (pan.toN - pan.fromN) * k;
         cam.clampToBounds();
         if (k >= 1) pan = null;
       }
@@ -150,19 +220,25 @@ export function makeCamera({ e = 320, n = 320, zoom = ZOOM_DEFAULT } = {}) {
       const halfW = cam.vw / 2 / cam.zoom + margin;
       const halfH = cam.vh / 2 / cam.zoom + margin;
       return {
-        minE: cam.e - halfW,
-        maxE: cam.e + halfW,
-        minN: cam.n - halfH,
-        maxN: cam.n + halfH,
+        minE: cam.rE - halfW,
+        maxE: cam.rE + halfW,
+        minN: cam.rN - halfH,
+        maxN: cam.rN + halfH,
       };
     },
 
     /**
      * Critically damped follow. The exponential form is frame-rate independent,
-     * so the camera behaves identically at 60 and 144 Hz — and a 1.2 m dead-zone
+     * so the camera behaves identically at 60 and 144 Hz — and the dead zone
      * keeps it from twitching while the player shuffles about setting up.
+     *
+     * The dead zone used to be 1.2 m, but it was never really 1.2: snapping the
+     * stored position meant the follow could not move at all until the increment
+     * cleared half a base pixel, which put the true threshold nearer 1.45 m and
+     * made the world set off with a lurch. With the snap gone `excess` ramps from
+     * zero properly, so a shorter, softer zone reads better than the old one did.
      */
-    follow(target, dt, { deadZone = 1.2, stiffness = 8 } = {}) {
+    follow(target, dt, { deadZone = 0.7, stiffness = 6 } = {}) {
       // A pan owns the camera until it finishes; otherwise the follow drags it
       // back toward the player on every frame of the glide.
       if (pan) return;
@@ -180,9 +256,7 @@ export function makeCamera({ e = 320, n = 320, zoom = ZOOM_DEFAULT } = {}) {
 
     snapTo(target) {
       pan = null;
-      cam.e = target.e;
-      cam.n = target.n;
-      cam.clampToBounds();
+      cam.setPosition(target.e, target.n);
     },
 
     /** Keep the valley on screen, with a little slack past the edge. */
@@ -212,9 +286,8 @@ export function makeCamera({ e = 320, n = 320, zoom = ZOOM_DEFAULT } = {}) {
         cam.e = minE > maxE ? (b.minE + b.maxE) / 2 : Math.min(maxE, Math.max(minE, cam.e));
         cam.n = minN > maxN ? (b.minN + b.maxN) / 2 : Math.min(maxN, Math.max(minN, cam.n));
       }
-      // Always last: whatever moved the camera, it lands on an art pixel.
-      cam.e = snap(cam.e);
-      cam.n = snap(cam.n);
+      // No snapping here. The stored position stays a float and the art-pixel
+      // grid is applied once, at draw time, in `setAlpha` — see the header.
     },
 
     /**
@@ -230,9 +303,7 @@ export function makeCamera({ e = 320, n = 320, zoom = ZOOM_DEFAULT } = {}) {
 
       cam.zoom = ZOOM_LADDER[next];
       const after = cam.screenToWorld(sx, sy);
-      cam.e += before.e - after.e;
-      cam.n += before.n - after.n;
-      cam.clampToBounds();
+      cam.setPosition(cam.e + before.e - after.e, cam.n + before.n - after.n);
       return cam.zoom;
     },
 
@@ -240,13 +311,13 @@ export function makeCamera({ e = 320, n = 320, zoom = ZOOM_DEFAULT } = {}) {
       if (sx != null) return cam.zoomAt(sx, sy, dir);
       const next = Math.min(ZOOM_LADDER.length - 1, Math.max(0, nearestRung(cam.zoom) + dir));
       cam.zoom = ZOOM_LADDER[next];
-      cam.clampToBounds();
+      cam.setPosition(cam.e, cam.n);
       return cam.zoom;
     },
 
     setZoom(z) {
       cam.zoom = ZOOM_LADDER[nearestRung(z)];
-      cam.clampToBounds();
+      cam.setPosition(cam.e, cam.n);
       return cam.zoom;
     },
 
@@ -290,13 +361,12 @@ export function makeCamera({ e = 320, n = 320, zoom = ZOOM_DEFAULT } = {}) {
       const toE = (minE + maxE) / 2;
       const toN = (minN + maxN) / 2;
       if (Math.hypot(toE - cam.e, toN - cam.n) < 0.5) {
-        cam.e = toE;
-        cam.n = toN;
         pan = null;
+        cam.setPosition(toE, toN);
       } else {
         pan = { fromE: cam.e, fromN: cam.n, toE, toN, elapsed: 0, duration: FIT_PAN_SECONDS };
+        cam.clampToBounds();
       }
-      cam.clampToBounds();
       return cam.zoom;
     },
 
@@ -313,8 +383,7 @@ export function makeCamera({ e = 320, n = 320, zoom = ZOOM_DEFAULT } = {}) {
     },
   };
 
-  cam.e = snap(cam.e);
-  cam.n = snap(cam.n);
+  cam.setAlpha(1);
   return cam;
 }
 

@@ -435,11 +435,11 @@ export function makeScene({ app, camera, atlas, ground }) {
     }
 
     const cf = atlas.get(characterKey(playerState, station)) || atlas.get('char-S-0');
-    if (cf) place(takeEntitySprite(), cf, playerState.e, playerState.n);
+    if (cf) placeActor(takeEntitySprite(), cf, playerState.e, playerState.n);
 
     if (assistantState) {
       const af = atlas.get(assistantKey(assistantState)) || atlas.get('aux-S-0');
-      if (af) place(takeEntitySprite(), af, assistantState.e, assistantState.n);
+      if (af) placeActor(takeEntitySprite(), af, assistantState.e, assistantState.n);
     }
 
     // Park the leftovers rather than destroying them; next frame may want them.
@@ -470,6 +470,9 @@ export function makeScene({ app, camera, atlas, ground }) {
    * Position one sprite. Rounded to whole BASE pixels: the container scale is an
    * integer, so a rounded base pixel is an exact screen pixel and the sprite
    * never lands between two of them.
+   *
+   * Right for scenery, which does not move: its pixels stay aligned with the
+   * ground's. Wrong for anyone walking — see `placeActor`.
    */
   function place(sprite, frame, e, n) {
     sprite.texture = frame.texture;
@@ -482,6 +485,30 @@ export function makeScene({ app, camera, atlas, ground }) {
     // a default here — otherwise the station or the player could inherit the
     // gold "already measured" glow left behind by whichever marker last held
     // this same pooled sprite. Callers that want the tint override it after.
+    sprite.tint = TINT_NONE;
+  }
+
+  /**
+   * Position someone who is moving. Rounded to a whole SCREEN pixel rather than
+   * a whole base pixel — at zoom 64 those differ by a factor of four.
+   *
+   * A walking figure is drawn from an interpolated position against a camera
+   * that is itself moving, and its position on screen is the difference of the
+   * two. Round both to the art grid and that difference is not monotonic: the
+   * surveyor slid forward, hung, then twitched back a base pixel — four screen
+   * pixels at the closest zoom — which is what read as jitter. Quantizing to the
+   * finest thing the display actually has leaves a one-pixel wobble, and one
+   * pixel at 60 Hz is invisible.
+   *
+   * Scenery keeps `place`. Only the people move, so only the people need this,
+   * and a static sprite off the art grid is the shimmer this file guards against.
+   */
+  function placeActor(sprite, frame, e, n) {
+    const k = camera.scale;
+    sprite.texture = frame.texture;
+    sprite.x = Math.round((e * PX_PER_M - frame.w * frame.ax) * k) / k;
+    sprite.y = Math.round((-n * PX_PER_M - frame.h * frame.ay) * k) / k;
+    sprite.zIndex = -n;
     sprite.tint = TINT_NONE;
   }
 
