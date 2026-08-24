@@ -355,6 +355,7 @@ export function showIntro({ modals, onStart, onContinue = null, saved = null, in
       el('p', { 'data-i18n': 'intro.objective' }),
     ),
     el('p.disclaimer', { 'data-i18n': 'intro.disclaimer' }),
+    el('p.intro-author', { 'data-i18n': 'intro.author' }),
   );
 
   const step2 = el(

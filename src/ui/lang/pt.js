@@ -106,6 +106,7 @@ export default {
   'intro.objective':
     'Implante ao menos dois marcos, instale a estação total sobre um deles orientando pelo outro, e levante todos os vértices da propriedade. Ao final você entrega a planta e o memorial descritivo.',
   'intro.disclaimer': 'Simulação didática. Os documentos gerados não têm valor legal.',
+  'intro.author': 'Professor Kaue de Moraes Vestena (UTFPR-BR), 2026',
 
   'difficulty.facil': 'Fácil',
   'difficulty.facilDesc': 'Poucos obstáculos, sem limite de tempo',
