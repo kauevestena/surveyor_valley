@@ -36,6 +36,7 @@ import {
   placeBeside,
   MODE as AUX_MODE,
 } from './game/assistant.js';
+import { makeHerd, updateHerd, interpolatedHerd, haltHerd, resetCalls } from './game/animals.js';
 import { revealMarksNear, applyRevealed, REVEAL_RADIUS } from './game/discovery.js';
 import { makeInput } from './game/input.js';
 import { makeTools, TOOL, PANEL_TOOLS } from './game/tools.js';
@@ -103,6 +104,12 @@ let scene = null;
 let effects = null;
 let player = makePlayer();
 let assistant = makeAssistant();
+/**
+ * The farm animals, held here for the same reason the crew is: they move, and
+ * `world.spatial` cannot hold anything that moves. Scenery — nothing in here
+ * blocks a step or a sight line. See `game/animals.js`.
+ */
+let herd = [];
 let input = null;
 let hoverTarget = null;
 let running = false;
@@ -221,6 +228,7 @@ function buildView(alpha = 1) {
     world,
     player: drawPlayer,
     assistant: interpolatedAssistant(assistant, alpha),
+    animals: interpolatedHerd(herd, alpha),
     activeParcelId: svc?.parcelId ?? null,
     corners: cornerStates(),
     // Every target ever measured this session, not just this parcel's — so a
@@ -356,6 +364,7 @@ const loop = makeLoop({
       // that reads the player's position wants that position to hold still.
       halt(player);
       haltAssistant(assistant);
+      haltHerd(herd);
       return;
     }
 
@@ -447,6 +456,11 @@ const loop = makeLoop({
  * why. He plants the pole as close as he got, and the reading is taken.
  */
 function updateCrew(dt) {
+  // The farm, first and independently: it owes nothing to the errand queue
+  // below and must keep moving whatever the crew is doing.
+  const { called } = updateHerd(herd, world, dt, { player });
+  if (called) audio.animal(called);
+
   const { arrived, gaveUp } = updateAssistant(assistant, world, dt, { player });
 
   // Walking away mid-errand calls a SIGHT off — the same rule that governs the
@@ -1611,6 +1625,13 @@ async function prepareWorld(seed, difficulty) {
   scene = makeScene({ app: display.app, camera, atlas, ground });
   effects?.reset();
   effects = makeEffects({ PIXI: pixi(), atlas, container: scene.effectsLayer, camera });
+
+  // The livestock, seeded from this world's own seed — so the same valley is
+  // always stocked the same way, however many times it is regenerated from a
+  // save. Where they have wandered to is not saved and does not need to be.
+  herd = makeHerd(world);
+  resetCalls();
+
   planView.invalidate();
 }
 
@@ -1924,6 +1945,9 @@ window.game = {
   },
   get assistant() {
     return assistant;
+  },
+  get herd() {
+    return herd;
   },
   camera,
   bus,

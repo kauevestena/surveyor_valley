@@ -357,7 +357,7 @@ export function makeScene({ app, camera, atlas, ground }) {
   /** Near enough for them to have noticed you. */
   const NOTICE_RADIUS = 14;
 
-  function residentKey(ent, playerState, now) {
+  function residentPose(ent, playerState, now) {
     let dir = 'S';
     if (playerState) {
       const dE = playerState.e - ent.e;
@@ -368,7 +368,49 @@ export function makeScene({ app, camera, atlas, ground }) {
     }
     const phase = now + ent.e * 0.37 + ent.n * 0.11;
     const breath = BREATH_PATTERN[Math.floor(phase / BREATH_SLOT) % BREATH_PATTERN.length];
+    return { dir, breath };
+  }
+
+  function residentKey(ent, playerState, now) {
+    const { dir, breath } = residentPose(ent, playerState, now);
     return `${ent.look || 'owner-m0'}-${dir}-${breath ? 'idle' : '0'}`;
+  }
+
+  /**
+   * How far to the side of their person the pet sits.
+   *
+   * Just outside the owner's own silhouette — a 24-pixel figure is 1.5 m wide —
+   * and a little to the south, so the existing `zIndex = -n` sort draws the
+   * animal in front of the person with no special case for it.
+   */
+  const PET_OFFSET = 0.85;
+  const PET_FORWARD = 0.2;
+
+  /**
+   * The cat or dog at an owner's side.
+   *
+   * Driven from the owner's OWN pose rather than from a pose of its own: they
+   * turn together to watch you come up the track, and they breathe on the same
+   * beat. Two figures near each other that blink out of step read as two
+   * sprites; in step, they read as a pair.
+   */
+  function petKey(ent, dir, breath) {
+    if (!ent.pet) return null;
+    return `${ent.pet}-${ent.petVariant ?? 0}-${dir}-${breath ? 'idle' : '0'}`;
+  }
+
+  /**
+   * Which frame of a farm animal to draw.
+   *
+   * Walking is the crew's contract exactly — four frames off a walk phase
+   * driven by ground covered. Standing still is NOT the crew's: a grazing
+   * animal alternates head-down and head-up on the same breath pattern a
+   * person breathes on, so a paddock has cows lifting their heads to look
+   * around in it rather than six statues facing the same way.
+   */
+  function animalKey(a) {
+    if (a.moving) return `${a.species}-${a.variant}-${a.facing}-${a.frame % 4}`;
+    return `${a.species}-${a.variant}-${a.facing}-${a.idleFrame ? 'idle' : 'graze'}`;
   }
 
   /**
@@ -397,7 +439,7 @@ export function makeScene({ app, camera, atlas, ground }) {
     return ent.id === hoverId ? mixRgb(base, TINT_HOVER, 0.65) : base;
   }
 
-  function drawEntities(w, playerState, station, assistantState, now, surveyed, hoverId, dt) {
+  function drawEntities(w, playerState, station, assistantState, now, surveyed, hoverId, dt, animals = []) {
     const detail = camera.zoom >= DETAIL_ZOOM;
     const view = camera.viewRect(12);
     visible.length = 0;
@@ -417,7 +459,9 @@ export function makeScene({ app, camera, atlas, ground }) {
     entityUsed = 0;
 
     for (const ent of visible) {
-      const key = ent.kind === KIND.MORADOR ? residentKey(ent, playerState, now) : spriteKeyFor(ent);
+      const resident = ent.kind === KIND.MORADOR;
+      const pose = resident ? residentPose(ent, playerState, now) : null;
+      const key = resident ? `${ent.look || 'owner-m0'}-${pose.dir}-${pose.breath ? 'idle' : '0'}` : spriteKeyFor(ent);
       const frame = key && atlas.get(key);
       if (!frame) continue;
       const sp = takeEntitySprite();
@@ -426,6 +470,24 @@ export function makeScene({ app, camera, atlas, ground }) {
       // a marker's gold glow leaks onto whatever unrelated entity reuses its
       // sprite next.
       sp.tint = tintFor(ent, surveyed, hoverId, dt);
+
+      if (!resident) continue;
+      const petFrame = atlas.get(petKey(ent, pose.dir, pose.breath));
+      if (petFrame) {
+        place(takeEntitySprite(), petFrame, ent.e + (ent.petSide ?? 1) * PET_OFFSET, ent.n - PET_FORWARD);
+      }
+    }
+
+    // ---- the farm ----------------------------------------------------------
+    // Drawn with `placeActor`, not `place`: these walk, and `place` rounds to
+    // the art grid, which is precisely the jitter that function's own comment
+    // documents. Culled against the same view rect the entities use, with a
+    // margin for a cow — she is nearly two metres of sprite hanging off her
+    // own position.
+    for (const a of animals) {
+      if (a.e < view.minE - 2 || a.e > view.maxE + 2 || a.n < view.minN - 2 || a.n > view.maxN + 2) continue;
+      const af = atlas.get(animalKey(a));
+      if (af) placeActor(takeEntitySprite(), af, a.e, a.n);
     }
 
     // The instrument, when one is set up, and the surveyor.
@@ -526,6 +588,7 @@ export function makeScene({ app, camera, atlas, ground }) {
       now = 0,
       surveyed,
       hoverId = null,
+      animals = [],
     } = view;
 
     // Seconds since the previous frame, for anything that eases. Taken from the
@@ -559,7 +622,7 @@ export function makeScene({ app, camera, atlas, ground }) {
 
     drawGround(w);
     drawLines(w, activeParcelId, now);
-    drawEntities(w, player, station, assistant, now, surveyed, hoverId, dt);
+    drawEntities(w, player, station, assistant, now, surveyed, hoverId, dt, animals);
     drawClouds(now);
 
     // Light pass, in screen space.
@@ -624,6 +687,8 @@ export function makeScene({ app, camera, atlas, ground }) {
     characterKey,
     assistantKey,
     residentKey,
+    petKey,
+    animalKey,
   };
 }
 

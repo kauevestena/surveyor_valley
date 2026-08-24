@@ -15,15 +15,42 @@
 //   3. If it still fails, the caller gets a clean, translated explanation
 //      instead of a black canvas.
 //
-// If a fully air-gapped lab ever needs it, drop the file next to index.html and
-// point LOCAL_URL at it; the loader prefers a local copy when one exists.
+// If a fully air-gapped lab ever needs it, drop the bundle at
+// `vendor/pixi.min.mjs` BESIDE index.html. Nothing else has to change: the
+// loader prefers a local copy whenever one is there.
 
 export const PIXI_VERSION = '8.19.0';
 export const PIXI_URL = `https://cdn.jsdelivr.net/npm/pixi.js@${PIXI_VERSION}/dist/pixi.min.mjs`;
 export const PIXI_SRI = 'sha384-tzOF3u3ENZL6upupKzzwDX4ZejjfFAIk3YWjgqGaOhyGL5lgC0i4AYng0reLPTwu';
 
-/** A vendored copy, if someone has placed one here. Absent by default. */
-const LOCAL_URL = './vendor/pixi.min.mjs';
+/** Where a vendored copy lives, relative to the PAGE. Absent by default. */
+const LOCAL_PATH = './vendor/pixi.min.mjs';
+
+/**
+ * The vendored copy's absolute URL.
+ *
+ * A function resolving against the DOCUMENT, rather than the bare relative
+ * string this used to be, and the difference is the whole bug:
+ *
+ *   `fetch('./vendor/x')`  resolves against the PAGE   -> /vendor/x
+ *   `import('./vendor/x')` resolves against THIS MODULE -> /src/render/vendor/x
+ *
+ * One string used for both silently disagrees. The probe finds the file, the
+ * import asks for a path that has never existed, the 404 lands in the same
+ * `catch` as "no local copy" — and the one route that cannot be blocked is
+ * skipped on every single load. So the air-gapped fallback had never worked and
+ * could not have: it failed precisely where there is no network to fall back
+ * to, silently, which is the only way this could have gone unnoticed.
+ *
+ * Computed on call rather than at module load: `document` does not exist under
+ * `node --test`, and this module is reachable from `render/scene.js`.
+ *
+ * @param {string} [base]  the document base. Injectable so a test can check the
+ *        resolution without a browser — see `tests/offline.test.mjs`.
+ */
+export function localPixiUrl(base = document.baseURI) {
+  return new URL(LOCAL_PATH, base).href;
+}
 
 let PIXI = null;
 let loading = null;
@@ -39,9 +66,19 @@ export function loadPixi() {
   loading = (async () => {
     // A vendored copy wins: it is the only route that cannot be blocked.
     try {
-      const head = await fetch(LOCAL_URL, { method: 'HEAD' });
-      if (head.ok) {
-        PIXI = await import(/* @vite-ignore */ LOCAL_URL);
+      const local = localPixiUrl();
+
+      // A probe that THROWS is not proof of absence. The service worker only
+      // intercepts GET, so a HEAD skips the cache entirely — on an offline
+      // visit it fails even when the bundle is sitting right there, and the
+      // import below, which does go through the cache, would have found it.
+      // So a failed probe falls through to the import and lets the cache
+      // answer. Only an explicit 404 from a server that did reply skips it,
+      // which is what keeps the ordinary load — no vendored copy, network
+      // fine — free of a 404 in the console.
+      const head = await fetch(local, { method: 'HEAD' }).catch(() => null);
+      if (!head || head.ok) {
+        PIXI = await import(/* @vite-ignore */ local);
         return PIXI;
       }
     } catch {

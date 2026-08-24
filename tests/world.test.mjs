@@ -438,7 +438,29 @@ test('every homestead has its owner standing on the doorstep', () => {
     assert.equal(who.blocksLOS, false);
     assert.equal(who.targetable, false, 'and is not a survey target');
     assert.match(who.look, /^owner-[mf]\d+$/, 'carries an atlas key for its own face');
+
+    // And somebody with them. The pet is fields on the person rather than an
+    // entity of its own — it has no position they do not give it and nothing to
+    // collide with, so making it one would put a second body in the spatial
+    // index, the sight-line walk and the world hash to draw eleven pixels of
+    // fur.
+    assert.ok(who.pet === 'cat' || who.pet === 'dog', `${p.id}: the owner has a ${who.pet} at their side`);
+    assert.ok(Number.isInteger(who.petVariant) && who.petVariant >= 0, 'the pet has a coat the atlas can paint');
+    assert.ok(who.petSide === 1 || who.petSide === -1, 'the pet sits on one side or the other');
+    assert.equal(w.entity(`${who.id}-pet`), null, 'the pet leaked into the entity list');
   }
+
+  // Both species turn up across a few valleys — a coin flip that always lands
+  // the same way is a coin flip that is not being made.
+  const pets = new Set();
+  for (const seed of ['sv-a', 'sv-b', 'sv-c', 'sv-d']) {
+    const v = buildWorld(seed, DIFFICULTY.medio);
+    for (const p of v.parcels) {
+      const who = v.residentFor(p.id);
+      if (who) pets.add(who.pet);
+    }
+  }
+  assert.deepEqual([...pets].sort(), ['cat', 'dog'], 'every owner in the valley got the same animal');
 });
 
 test('a marco planted by the player joins the world and the spatial index', () => {

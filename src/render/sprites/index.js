@@ -11,6 +11,7 @@
 import { makeRng } from '../../core/rng.js';
 import { tree, bush, rock, SIZES } from './nature.js';
 import { surveyor } from './character.js';
+import { chicken, cow, pig, pet, ANIMAL_VARIANTS, LIVESTOCK, PETS } from './animals.js';
 import { resolveLook, LIGEIRINHO_LOOK, OWNER_LOOKS, ownerLook } from '../palette.js';
 import { playerMarco, boundaryMark, totalStation, prism, fencePost } from './survey.js';
 import { grassTuft, tussock, flower, pebble, stone, reed, clod, crop } from './ground.js';
@@ -105,6 +106,50 @@ export function buildSprites(look = null) {
     const east = surveyor({ pose, look: playerLook });
     add(`char-kneel-E${suffix}`, east);
     add(`char-kneel-W${suffix}`, { pix: east.pix.mirrorX(), anchorX: 0.5, anchorY: east.anchorY });
+  }
+
+  // ---- the farm -----------------------------------------------------------
+  // Livestock wanders, so unlike the owners these DO need a walk cycle: four
+  // frames a direction, plus the two rest poses a grazing animal alternates
+  // between. West is east mirrored, as it is for every other figure here.
+  //
+  // Keyed `<species>-<variant>-<dir>-<pose>`. The variant is a coat, dealt when
+  // the herd is placed — the atlas is painted at boot and cannot know which
+  // farm gets the brown cow.
+  for (const [species, paint] of Object.entries(LIVESTOCK)) {
+    for (let v = 0; v < ANIMAL_VARIANTS; v++) {
+      const key = `${species}-${v}`;
+      for (const dir of ['S', 'N', 'E']) {
+        for (let frame = 0; frame < 4; frame++) add(`${key}-${dir}-${frame}`, paint({ dir, frame, variant: v }));
+        add(`${key}-${dir}-idle`, paint({ dir, pose: 'idle', variant: v }));
+        add(`${key}-${dir}-graze`, paint({ dir, pose: 'graze', variant: v }));
+      }
+      for (let frame = 0; frame < 4; frame++) {
+        const east = paint({ dir: 'E', frame, variant: v });
+        add(`${key}-W-${frame}`, { pix: east.pix.mirrorX(), anchorX: 0.5, anchorY: east.anchorY });
+      }
+      for (const pose of ['idle', 'graze']) {
+        const east = paint({ dir: 'E', pose, variant: v });
+        add(`${key}-W-${pose}`, { pix: east.pix.mirrorX(), anchorX: 0.5, anchorY: east.anchorY });
+      }
+    }
+  }
+
+  // The pet at an owner's side. Sitting is the whole roster — its person stands
+  // on a doorstep and never moves — so this is the owners' two-pose shape, and
+  // `scene.js` drives it from the owner's own breath.
+  for (const species of PETS) {
+    for (let v = 0; v < ANIMAL_VARIANTS; v++) {
+      const key = `${species}-${v}`;
+      for (const dir of ['S', 'N', 'E']) {
+        add(`${key}-${dir}-0`, pet(species, { dir, variant: v }));
+        add(`${key}-${dir}-idle`, pet(species, { dir, pose: 'idle', variant: v }));
+      }
+      const east = pet(species, { dir: 'E', variant: v });
+      add(`${key}-W-0`, { pix: east.pix.mirrorX(), anchorX: 0.5, anchorY: east.anchorY });
+      const eastIdle = pet(species, { dir: 'E', pose: 'idle', variant: v });
+      add(`${key}-W-idle`, { pix: eastIdle.pix.mirrorX(), anchorX: 0.5, anchorY: eastIdle.anchorY });
+    }
   }
 
   // ---- the kit ------------------------------------------------------------

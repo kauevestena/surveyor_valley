@@ -10,8 +10,13 @@ having forgotten all of it.
 ## Tests
 
 ```bash
-node --test tests/
+node --test
 ```
+
+With no argument, and not `node --test tests/`: a bare directory stopped being expanded
+after Node 20, and 22 and 24 both report `Cannot find module .../tests` as a FAILING TEST
+rather than as a usage error — so the run that executed nothing still looks like a run.
+`.github/workflows/checks.yml` runs the same command on 20, 22 and 24.
 
 No `package.json`, no install, nothing to download: Node 20 runs ESM and has a test
 runner built in. This works only because everything under `src/core/`, `src/survey/`,
@@ -51,7 +56,15 @@ memorial descritivo, without a browser.
 - `tests/persistence.test.mjs` — saving and resuming a campaign, and refusing a
   corrupt or future-version save rather than trusting it.
 - `tests/offline.test.mjs` — the service worker's precache list matches the files on disk,
-  and the PixiJS pin, its SRI hash and the cached URL all agree.
+  the PixiJS pin, its SRI hash and the cached URL all agree, and a vendored copy of Pixi
+  resolves next to the page rather than next to the module that imports it.
+Twenty-six of the eighty modules under `src/` are imported by no test at all — the whole
+of `ui/`, plus `main.js`, `scene.js`, `overlays.js`, `effects.js` and `audio.js` — because
+they need a DOM. Nothing else stands between them and GitHub Pages: no bundler, no type
+checker, not even a parse. So CI's second job parses every shipped module as ESM, which is
+the only check in the repository that looks at those files, and the only thing that would
+catch a stray character in `ui/hud.js` shipping a black screen past a green test suite.
+
 - `tests/render.test.mjs` — the art pipeline. Sprite painters are deterministic and
   outlined, the shading ramp shifts hue in the right direction for every base colour,
   ground chunks bake identically in slices as in one pass, and the camera never leaves
@@ -120,6 +133,21 @@ tests/
   metres.** The producer counts rows northward; a painter that counts them the other way
   mirrors the chunk, which is exactly what happened. The grid's orientation now has a
   test.
+- **The farm animals are outside `world.entities`, and that is load-bearing.** The
+  livestock in every farmyard, and the cat or dog at each owner's side, block nothing:
+  not walking, not a sight line, and none of them can be pointed at with the instrument.
+  Two mechanical facts force the arrangement — `world.spatial` is insert-only, so it
+  cannot hold anything that travels, and `world.hash()` mixes every entity's position, so
+  a herd inside it would change the identity of the valley sixty times a second. The
+  didactic reason is the one that actually matters: a cow between the tripod and a corner
+  would refuse a sight for a reason no student could learn anything from, and the same
+  seed would then close to a different error depending on where she happened to stand.
+  So the herd lives in `game/animals.js` and is held by `main.js` beside the player and
+  Ligeirinho, who are outside the entity list for the same reason. **Placement is seeded,
+  motion is not**: which farm gets the brown cow comes out of the seed, where she has
+  wandered to by half past nine does not. `tests/animals.test.mjs` asserts the world hash
+  is untouched by a minute of wandering, because that is the promise everything else
+  rests on.
 - **There is one collision solver, and both people use it.** `player.js#slideStep` takes a
   radius; Ligeirinho passes a smaller one and sub-steps it, because at 45 m/s a fixed step
   is 0.75 m and `canStand` tests a position rather than a swept path. A second

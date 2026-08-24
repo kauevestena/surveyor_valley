@@ -104,13 +104,28 @@ export const makePlayerMarco = (e, n, o = {}) =>
   makeEntity(KIND.MARCO_JOGADOR, e, n, { targetKind: 'marco', ...o });
 
 /**
- * Somebody who lives here.
+ * Somebody who lives here, and the animal at their side.
  *
  * `look` is an atlas key prefix — `owner-f2` — rather than a colour, because
  * the sheet is painted once at boot from fixed archetypes and the valley is
  * built per seed. `scene.js` appends the direction and the breath frame.
+ *
+ * `pet` is the same idea one level smaller: `cat` or `dog`, with a coat and a
+ * side to sit on. It is not an entity of its own on purpose — it has no
+ * position its person does not give it and nothing to collide with, so making
+ * it one would put a second body in the spatial index, the line-of-sight walk
+ * and the world hash to draw eleven pixels of fur.
  */
-export const makeResident = (e, n, o = {}) => makeEntity(KIND.MORADOR, e, n, o);
+export function makeResident(e, n, o = {}) {
+  const ent = makeEntity(KIND.MORADOR, e, n, o);
+  // Attached after the fact rather than passed through `makeEntity`, which
+  // lists what an entity has field by field — and a `petSide` on every tree in
+  // the valley is not what that list is for.
+  ent.pet = o.pet || null;
+  ent.petVariant = o.petVariant ?? 0;
+  ent.petSide = o.petSide ?? 1;
+  return ent;
+}
 
 /** A building. `seg` is its footprint ring; corners are targetable. */
 export function makeBuilding(ring, o = {}) {

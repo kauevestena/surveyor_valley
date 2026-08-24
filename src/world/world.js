@@ -272,8 +272,18 @@ export function buildWorld(seed, difficulty) {
  * AFTER `ensureClosableRing`, because that pass deletes obstacles and `sedeFor`
  * picks the doorstep by walking outward until the ground is standable — sited
  * before it, an owner could end up standing where a tree used to be.
+ *
+ * Everybody gets a cat or a dog, and it sits at their side rather than being an
+ * entity of its own. That is not a shortcut: the pet has no position the owner
+ * does not give it, no behaviour, and nothing to collide with — it is part of
+ * how this person is drawn, in the same way their hat is. Fields on the
+ * resident also leave `world.hash()` exactly where it was, which is what lets a
+ * save written before any of this existed still line up with its valley.
+ *
+ * Its own rng stream, so dealing out pets can never shift a tree or a corner.
  */
 function placeResidents(world) {
+  const rng = makeRng(world.seed, 'pets');
   world.parcels.forEach((parcel, i) => {
     const sede = world.sedeFor(parcel.id);
     if (!sede) return;
@@ -282,6 +292,11 @@ function placeResidents(world) {
       label: parcel.owner,
       parcelId: parcel.id,
       look: `owner-${parcel.ownerBody === 'f' ? 'f' : 'm'}${i}`,
+      pet: rng.chance(0.5) ? 'cat' : 'dog',
+      /** A coat. Two are painted per species — see `sprites/animals.js`. */
+      petVariant: rng.int(0, 1),
+      /** Which side of their person it sits on: -1 west, +1 east. */
+      petSide: rng.chance(0.5) ? -1 : 1,
     });
     world.entities.push(ent);
     world.byId.set(ent.id, ent);

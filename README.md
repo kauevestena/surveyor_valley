@@ -84,7 +84,7 @@ matters in a classroom. For an air-gapped lab, drop the Pixi bundle at
 ## Tests
 
 ```bash
-node --test tests/     # 183 of them, no install, no dependencies
+node --test            # 243 of them, no install, no dependencies
 ```
 
 Node 20 runs ESM and ships a test runner, and everything under `src/core/`, `src/survey/`,

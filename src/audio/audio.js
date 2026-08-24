@@ -331,6 +331,55 @@ export function makeAudio() {
       });
     },
 
+    /**
+     * A farm animal, heard because you have walked up to one.
+     *
+     * On the SFX bus rather than with the ambient birds: birdsong is weather,
+     * and it is gated on the music setting because it is part of the score. A
+     * moo comes from an animal standing on screen — it is diegetic, it belongs
+     * with the footsteps, and switching the music off must not make the farm
+     * fall silent.
+     *
+     * Quiet, all of them. The birds sit at 0.045 and these are tuned against
+     * that: a farm heard across a field, not a petting zoo.
+     */
+    animal(species) {
+      switch (species) {
+        case 'cow':
+          // Long, low, and falling — the bend is most of what makes it a moo
+          // rather than a foghorn.
+          tone({ freq: 138, type: 'sawtooth', gain: 0.055, attack: 0.08, decay: 0.85, bend: 0.72 });
+          tone({ freq: 208, type: 'triangle', gain: 0.028, attack: 0.1, decay: 0.7, bend: 0.76 });
+          break;
+        case 'pig':
+          // Two grunts. One is a noise; two is an animal. The second is a
+          // delayed tone rather than a second burst — `noise()` fires
+          // immediately, so two of them land on top of each other and thicken
+          // one grunt instead of making two.
+          noise({ cut: 420, q: 3.2, gain: 0.07, decay: 0.09 });
+          tone({ freq: 104, type: 'square', gain: 0.035, decay: 0.13, bend: 0.78, delay: 0.15 });
+          break;
+        case 'chicken':
+          // Two clipped blips and a rise on the end: the shape of a cluck, at a
+          // pitch that sits well clear of the birdsong above it.
+          tone({ freq: 720, type: 'square', gain: 0.03, attack: 0.004, decay: 0.05, bend: 0.7 });
+          tone({ freq: 660, type: 'square', gain: 0.028, attack: 0.004, decay: 0.05, bend: 0.7, delay: 0.09 });
+          tone({ freq: 540, type: 'triangle', gain: 0.035, attack: 0.01, decay: 0.16, bend: 1.5, delay: 0.19 });
+          break;
+        case 'dog':
+          noise({ cut: 900, q: 2.2, gain: 0.06, decay: 0.06 });
+          tone({ freq: 320, type: 'sawtooth', gain: 0.05, attack: 0.005, decay: 0.14, bend: 0.6 });
+          break;
+        case 'cat':
+          // Up and then down over one breath, which is the whole of a meow.
+          tone({ freq: 480, type: 'triangle', gain: 0.04, attack: 0.03, decay: 0.16, bend: 1.35 });
+          tone({ freq: 640, type: 'triangle', gain: 0.035, attack: 0.02, decay: 0.3, bend: 0.62, delay: 0.15 });
+          break;
+        default:
+          break;
+      }
+    },
+
     /** Interface click. */
     click() {
       noise({ cut: 2600, q: 3, gain: 0.03, decay: 0.035 });
