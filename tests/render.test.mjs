@@ -125,6 +125,92 @@ test('the three painted size buckets really differ in size', () => {
   assert.ok(at(2) - at(0) > 10, 'buckets should be visibly different');
 });
 
+test('a tree stands up: canopy above, trunk below, roots on the ground', () => {
+  const byKey = new Map(buildSprites().map((s) => [s.key, s]));
+
+  for (const v of [0, 3, 5]) {
+    const t = byKey.get(`tree-${v}-1`);
+    // The whole point of the shape: a canopy taller than it is wide over a
+    // trunk you can actually see. The old tree was a wide cushion on a stump
+    // and came out almost square.
+    assert.ok(t.pix.h > t.pix.w * 1.4, `tree-${v} is ${t.pix.w}x${t.pix.h}, not an upright tree`);
+
+    // Two pixels above the ground line there must be wood: brown, meaning red
+    // clearly ahead of green. Sampling the middle third catches the trunk
+    // wherever its lean put it.
+    const groundY = Math.round(t.pix.h * t.anchorY) - 2;
+    let wood = 0;
+    for (let x = Math.round(t.pix.w / 3); x < Math.round((t.pix.w * 2) / 3); x++) {
+      const [r, g, b, a] = t.pix.get(x, groundY);
+      if (a > 128 && r > g + 20 && g > b) wood++;
+    }
+    assert.ok(wood > 8, `tree-${v} has ${wood} px of trunk at the ground`);
+
+    // And through the middle of the canopy it must be leaf: green ahead of red.
+    let foliage = 0;
+    for (let x = 4; x < t.pix.w - 4; x++) {
+      const [r, g, b, a] = t.pix.get(x, Math.round(t.pix.h * 0.35));
+      if (a > 128 && g > r && g > b) foliage++;
+    }
+    assert.ok(foliage > t.pix.w / 3, `tree-${v} has ${foliage} px of canopy across its middle`);
+  }
+});
+
+test('every tree variant is its own tree, and two of them are autumn', () => {
+  const byKey = new Map(buildSprites().map((s) => [s.key, s]));
+
+  // Eight variants that painted four looks was the old arrangement: `variant`
+  // only chose a leaf ramp, so half the sheet was duplicates in different
+  // greens. They now differ in silhouette too.
+  const hashes = new Set();
+  for (let v = 0; v < 8; v++) hashes.add(byKey.get(`tree-${v}-1`).pix.hash());
+  assert.equal(hashes.size, 8, 'the eight tree variants must not repeat');
+
+  /** Mean colour of the canopy band, over opaque pixels only. */
+  const canopy = (key) => {
+    const t = byKey.get(key);
+    let r = 0;
+    let g = 0;
+    let n = 0;
+    for (let y = Math.round(t.pix.h * 0.1); y < t.pix.h * 0.5; y++) {
+      for (let x = 0; x < t.pix.w; x++) {
+        const [pr, pg, , a] = t.pix.get(x, y);
+        if (a < 128) continue;
+        r += pr;
+        g += pg;
+        n++;
+      }
+    }
+    return { r: r / n, g: g / n };
+  };
+
+  for (const v of [0, 1, 2, 3, 4, 5]) {
+    const c = canopy(`tree-${v}-1`);
+    assert.ok(c.g > c.r, `tree-${v} should be in leaf, got r=${c.r | 0} g=${c.g | 0}`);
+  }
+  for (const v of [6, 7]) {
+    const c = canopy(`tree-${v}-1`);
+    // Warm, and specifically NOT the plum that the house hue rotation turns an
+    // orange into on its shadow step — hence red well clear of green rather
+    // than merely ahead of it.
+    assert.ok(c.r > c.g * 1.25, `tree-${v} should be in autumn colour, got r=${c.r | 0} g=${c.g | 0}`);
+  }
+});
+
+test('the canopy is painted, not filled', () => {
+  const t = buildSprites().find((s) => s.key === 'tree-0-2');
+  const seen = new Set();
+  for (let y = Math.round(t.pix.h * 0.1); y < t.pix.h * 0.55; y++) {
+    for (let x = 0; x < t.pix.w; x++) {
+      const [r, g, b, a] = t.pix.get(x, y);
+      if (a > 128) seen.add(`${r},${g},${b}`);
+    }
+  }
+  // Three leaf steps, three branch steps, the hollows and the outline's
+  // per-pixel shades. A flat green disc would score about four.
+  assert.ok(seen.size > 12, `expected a painted canopy, got ${seen.size} distinct colours`);
+});
+
 test('sprite keys the scene asks for all exist', () => {
   const keys = new Set(buildSprites().map((s) => s.key));
   for (let v = 0; v < 8; v++) for (let s = 0; s < 3; s++) assert.ok(keys.has(`tree-${v}-${s}`));

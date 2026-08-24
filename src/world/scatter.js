@@ -173,24 +173,39 @@ export function clearSightlinesToCorners(entities, parcels, difficulty) {
 
 const KIND_BENFEITORIA = 'benfeitoria';
 
+/**
+ * Sixteen slots for a tree's variant, of which two are the autumn pair. A gold
+ * tree in a green pasture is a landmark; a pasture full of them is a different
+ * season.
+ */
+const TREE_VARIANT = [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 1, 4, 6, 7];
+
 function makePlant(kind, e, n, rng) {
+  // ONE roll, mapped into each kind's own variant range below.
+  //
+  // It has to stay a single draw. How many numbers this function takes from
+  // the scatter stream decides where every later tree, rock and bush in the
+  // valley lands, so widening the range is free and adding a second draw
+  // rebuilds the world for every existing seed. It used to be `int(0, 3)` for
+  // all three kinds, which meant half the painted tree art and a third of the
+  // rock art was built at boot and never once appeared.
+  const roll = rng.int(0, 15);
   const opts = {
-    variant: rng.int(0, 3),
     scale: rng.range(0.75, 1.35),
     rot: rng.range(0, Math.PI * 2),
   };
   if (kind === 'arvore') {
     const s = rng.range(0.8, 1.4);
-    return makeTree(e, n, { ...opts, scale: s, r: 0.35 * s, losR: rng.range(2.0, 3.4) * s });
+    return makeTree(e, n, { ...opts, variant: TREE_VARIANT[roll], scale: s, r: 0.35 * s, losR: rng.range(2.0, 3.4) * s });
   }
   if (kind === 'rocha') {
     const s = rng.range(0.6, 1.5);
-    return makeRock(e, n, { ...opts, scale: s, r: 0.6 * s, losR: 0.6 * s });
+    return makeRock(e, n, { ...opts, variant: roll % 5, scale: s, r: 0.6 * s, losR: 0.6 * s });
   }
   const s = rng.range(0.7, 1.3);
   // Only the taller scrub actually stops a sight line.
   const tall = s > 1.05;
-  return makeBush(e, n, { ...opts, scale: s, blocksLOS: tall, losR: tall ? 0.9 * s : 0 });
+  return makeBush(e, n, { ...opts, variant: roll % 6, scale: s, blocksLOS: tall, losR: tall ? 0.9 * s : 0 });
 }
 
 /**

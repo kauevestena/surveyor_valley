@@ -19,9 +19,20 @@ export const P = {
   grassDeep: ramp('#3f7a2c', 3),
 
   leaf: [ramp('#4f9c33', 3), ramp('#5fae3a', 3), ramp('#3f8a2e', 3), ramp('#6fb845', 3)],
-  leafAutumn: ramp('#c98a2e', 3),
-  trunk: ramp('#8a5f34', 3),
-  branch: ramp('#6e4a28', 3),
+  // Gold and rust. Same shape as `leaf`, because a tree picks one list or the
+  // other by variant and must not care which it got.
+  //
+  // Both take a reduced hue rotation for the same reason `skin` does: the house
+  // default swings a warm hue toward crimson on the shadow step, which under a
+  // green canopy is a nice deep shade and under an orange one is wine. Autumn
+  // leaves in shadow are brown.
+  leafAutumn: [ramp('#c98a2e', 3, { hueShift: 0.1 }), ramp('#c4602e', 3, { hueShift: 0.1 })],
+  // Bark, and the limbs under a canopy. Reduced hue rotation again, and a
+  // narrower spread: at the house default the shadow step of this brown is
+  // #481f2c, a plum, and a trunk painted with it has a bruise down one side
+  // rather than a shaded flank.
+  trunk: ramp('#8a5f34', 3, { hueShift: 0.12, spread: 0.12 }),
+  branch: ramp('#6e4a28', 3, { hueShift: 0.12, spread: 0.12 }),
 
   soil: ramp('#a8763e', 3),
   soilWet: ramp('#7a5730', 3),

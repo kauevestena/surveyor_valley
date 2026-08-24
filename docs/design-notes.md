@@ -100,6 +100,15 @@ tests/
   by 1.37 is what turns it back into mush. An entity's continuous `scale` is bucketed
   into one of three sizes that were *painted* at that size, rather than resized at draw
   time.
+- **The art is written, not drawn, and it is nobody's but ours.** Every sprite in the
+  world is a function that paints into a buffer out of `render/palette.js`; there is not
+  one image file in the repository outside `assets/`, which holds only the logo. The
+  farm-sim house style is the acknowledged target — one light direction from the upper
+  left, three-step ramps with a hue rotation, 16 px to the metre, a canopy taller than
+  it is wide — and those are conventions, which belong to nobody. Nothing here is traced,
+  sampled, eyedropped or otherwise derived from another game's art, no such art is
+  checked in to derive it from, and any future contribution to `render/sprites/` is held
+  to the same line.
 - **Ground detail is baked, never drawn as entities.** Ten thousand tufts of grass cost
   the same twenty chunk blits as bare dirt. Anything that must move goes in
   `render/effects.js`, which is budgeted at about eighty sprites.
