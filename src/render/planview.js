@@ -11,6 +11,14 @@
 // why the overview, of all things, was the slowest screen in the game.
 
 import { KIND } from '../world/entities.js';
+import { warmPass } from './palette.js';
+import { UI, alpha } from './tokens.js';
+
+/**
+ * The out-of-bounds surround. Not a UI token: it is the valley seen from far
+ * enough away to be a map, and it wants to read as land rather than as panel.
+ */
+const PLAN_GROUND = '#59713f';
 
 const WATER_ONLY = false;
 
@@ -53,7 +61,11 @@ export function makePlanView({ camera }) {
   /**
    * @param {CanvasRenderingContext2D} ctx  already transformed to CSS pixels
    */
-  function draw(ctx, { world, player, activeParcelId, network = [], setups = [] }) {
+  /** A 0..1 triple as a CSS colour. */
+  const rgbCss = ([r, g, b]) =>
+    `rgb(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)})`;
+
+  function draw(ctx, { world, player, activeParcelId, network = [], setups = [], light = null }) {
     if (!world) return;
     if (rasterFor !== world) bake(world);
 
@@ -63,7 +75,7 @@ export function makePlanView({ camera }) {
     const h = (b.maxN - b.minN) * camera.zoom;
 
     ctx.save();
-    ctx.fillStyle = '#59713f';
+    ctx.fillStyle = PLAN_GROUND;
     ctx.fillRect(0, 0, camera.vw, camera.vh);
 
     // Smoothing ON here, unlike the field view: at 4-8 px/m this is a map, and
@@ -71,6 +83,27 @@ export function makePlanView({ camera }) {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(raster, tl.x, tl.y, w, h);
+
+    // The same daylight the field view gets. Without it, zooming out past the
+    // plan threshold at golden hour snapped the valley back to neutral noon —
+    // a hard discontinuity across a boundary the player crosses constantly.
+    //
+    // Over the ground only: everything below this is instrumentation, and a
+    // traverse that dims at dusk is a traverse you cannot read.
+    if (light) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.fillStyle = rgbCss(light.tint);
+      ctx.fillRect(0, 0, camera.vw, camera.vh);
+      const glow = warmPass(light);
+      if (glow) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = glow.alpha;
+        ctx.fillStyle = rgbCss(glow.rgb);
+        ctx.fillRect(0, 0, camera.vw, camera.vh);
+      }
+      ctx.restore();
+    }
 
     // ---- parcels ----------------------------------------------------------
     ctx.lineJoin = 'round';
@@ -84,10 +117,10 @@ export function makePlanView({ camera }) {
       });
       ctx.closePath();
       if (active) {
-        ctx.fillStyle = 'rgba(242, 193, 78, 0.16)';
+        ctx.fillStyle = alpha(UI.gold, 0.16);
         ctx.fill();
       }
-      ctx.strokeStyle = active ? '#d9622b' : 'rgba(38, 30, 18, 0.55)';
+      ctx.strokeStyle = active ? UI.accent : alpha(UI.ink, 0.55);
       ctx.lineWidth = active ? 2.5 : 1.2;
       ctx.setLineDash(active ? [] : [6, 4]);
       ctx.stroke();
@@ -104,7 +137,7 @@ export function makePlanView({ camera }) {
         if (i === 0) ctx.moveTo(p.x, p.y);
         else ctx.lineTo(p.x, p.y);
       });
-      ctx.strokeStyle = '#d9622b';
+      ctx.strokeStyle = UI.accent;
       ctx.lineWidth = 2;
       ctx.setLineDash([7, 4]);
       ctx.stroke();
@@ -121,10 +154,10 @@ export function makePlanView({ camera }) {
 
       ctx.beginPath();
       ctx.arc(p.x, p.y, mine ? 4 : 2.6, 0, Math.PI * 2);
-      ctx.fillStyle = mine ? (surveyed ? '#f2c14e' : '#d9622b') : '#3f5b7a';
+      ctx.fillStyle = mine ? (surveyed ? UI.gold : UI.accent) : UI.blue;
       ctx.fill();
       if (mine) {
-        ctx.strokeStyle = '#2b2b2b';
+        ctx.strokeStyle = UI.ink;
         ctx.lineWidth = 1.2;
         ctx.stroke();
       }
@@ -134,9 +167,9 @@ export function makePlanView({ camera }) {
     const p = camera.worldToScreen(player.e, player.n);
     ctx.beginPath();
     ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = UI.panel;
     ctx.fill();
-    ctx.strokeStyle = '#23281f';
+    ctx.strokeStyle = UI.ink;
     ctx.lineWidth = 2;
     ctx.stroke();
 

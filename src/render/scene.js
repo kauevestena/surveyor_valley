@@ -20,14 +20,66 @@ import { DETAIL_ZOOM } from './camera.js';
 import { KIND } from '../world/entities.js';
 import { SIZES } from './sprites/nature.js';
 import { pixi } from './pixi.js';
+import { OCCUPY_RADIUS } from '../game/service.js';
+import { warmPass, P } from './palette.js';
+import { UI, tintOf } from './tokens.js';
+
+/**
+ * The vignette, open at midday and closed at both ends of the day.
+ *
+ * Small numbers: this is a frame, not a mood. Past about 0.3 the corners of a
+ * 40-hectare valley go to mud and the player loses the scenery they are meant
+ * to be surveying.
+ */
+const VIGNETTE_DAY = 0.10;
+const VIGNETTE_EDGE = 0.28;
+
+/**
+ * The cloud shadow: how dark, and how fast it crosses.
+ *
+ * Both small on purpose. This is a change in the light, not a set-dressing
+ * element the player should ever look at directly — if you notice the cloud
+ * rather than the valley going briefly dim, it is too strong or too quick.
+ * Drift is in base pixels per second, and the two axes are deliberately not a
+ * round ratio so the pattern does not visibly repeat on a diagonal.
+ */
+const CLOUD_ALPHA = 0.18;
+const CLOUD_DRIFT_E = 11;
+const CLOUD_DRIFT_N = 3.4;
+
+/**
+ * How far the 256-pixel cloud tile is stretched.
+ *
+ * The world container is in base pixels at 16 per metre, so the tile at 1:1
+ * would be sixteen metres across — a cloud the size of a garden.
+ *
+ * At 3 the tile spans 48 m, which puts a cloud at roughly twenty metres across:
+ * bigger than the default zoom's forty-metre view would make legible if it were
+ * any larger. Tried at 6 first, and a cloud then filled more than the whole
+ * screen — the shadow EDGE never appeared, so it read as the picture dimming
+ * rather than as weather going over. What sells this is seeing the edge cross.
+ */
+const CLOUD_SCALE = 3;
 
 /**
  * A previously-measured survey target, tinted gold — the same job as the
  * plan-view's orange→yellow "surveyed" swap, so the colour means the same
  * thing in both views. Flat, no pulse: a memory aid should sit still.
  */
-const TINT_SURVEYED = 0xffd23f;
+const TINT_SURVEYED = tintOf(UI.gold);
 const TINT_NONE = 0xffffff;
+/** The target under the reticle: a lift, not a colour. */
+const TINT_HOVER = 0xfff0c8;
+
+/**
+ * How long a target takes to turn gold once it has been measured.
+ *
+ * The flip used to happen on the same frame as the spark, as a hard colour
+ * swap — so the single most important event in the game read as a glitch beside
+ * its own particle effect. A fifth of a second is enough to see it happen
+ * without holding anything up.
+ */
+const SURVEYED_FADE = 0.2;
 
 /** Which painted size bucket an entity's continuous scale belongs in. */
 function sizeBucket(scale = 1) {
@@ -69,20 +121,46 @@ export function makeScene({ app, camera, atlas, ground }) {
   const sorted = new PIXI.Container();
   const effects = new PIXI.Container();
 
+  /**
+   * Cloud shadow, drifting.
+   *
+   * The one piece of weather in the game, and deliberately the only one: it is
+   * pure presentation, so it can never disagree with a sight line or a soil
+   * verdict the way rain or fog would be tempted to. A valley whose light never
+   * changes reads as a screenshot however good the art is, and a shadow
+   * crossing it costs one sprite.
+   *
+   * Last child of the world container, so it falls across the trees and the
+   * crew as well as the ground — a cloud shadow that stopped at the treeline
+   * would be a stain on the grass instead.
+   */
+  const clouds = new PIXI.TilingSprite({ texture: makeClouds(PIXI), width: 1, height: 1 });
+  clouds.blendMode = 'multiply';
+  clouds.alpha = CLOUD_ALPHA;
+  clouds.tileScale.set(CLOUD_SCALE);
+
   sorted.sortableChildren = true;
-  world.addChild(groundLayer, overlayLines, sorted, effects);
+  world.addChild(groundLayer, overlayLines, sorted, effects, clouds);
   app.stage.addChild(world);
 
-  // Screen-space light pass: a full-viewport tint plus a vignette.
+  // Screen-space light pass: a multiply tint, an additive warmth, and a vignette.
+  //
+  // The multiply alone can only ever take light away, so an evening painted with
+  // it is a darker, browner midday — the sun sets by the valley going muddy. The
+  // additive pass is the other half of `lightAt()`, and it is what makes golden
+  // hour read as light rather than as dusk arriving early.
   const light = new PIXI.Container();
   const tint = new PIXI.Sprite(PIXI.Texture.WHITE);
   tint.blendMode = 'multiply';
   tint.alpha = 0;
+  const warm = new PIXI.Sprite(PIXI.Texture.WHITE);
+  warm.blendMode = 'add';
+  warm.alpha = 0;
   const vignette = new PIXI.Sprite(makeVignette(PIXI));
   // Enough to frame the scene and draw the eye to the middle; any more and the
-  // corners of a 40-hectare valley go to mud.
-  vignette.alpha = 0.16;
-  light.addChild(tint, vignette);
+  // corners of a 40-hectare valley go to mud. Varied through the day below.
+  vignette.alpha = VIGNETTE_DAY;
+  light.addChild(tint, warm, vignette);
   app.stage.addChild(light);
 
   // ---- pools --------------------------------------------------------------
@@ -142,7 +220,7 @@ export function makeScene({ app, camera, atlas, ground }) {
         if (tex) {
           if (sp.texture !== tex) {
             sp.texture = tex;
-            sp.tint = 0xffffff;
+            sp.tint = TINT_NONE;
             sp.width = cm * PX_PER_M;
             sp.height = cm * PX_PER_M;
           }
@@ -165,7 +243,7 @@ export function makeScene({ app, camera, atlas, ground }) {
   }
 
   // ---- parcel boundaries and fences ---------------------------------------
-  function drawLines(w, activeParcelId) {
+  function drawLines(w, activeParcelId, now) {
     overlayLines.clear();
 
     for (const parcel of w.parcels) {
@@ -179,10 +257,17 @@ export function makeScene({ app, camera, atlas, ground }) {
       }
       overlayLines.closePath();
 
-      if (active) overlayLines.fill({ color: 0xf2c14e, alpha: 0.08 });
+      // The active parcel breathes. A static eight-percent wash was the only
+      // "this is the job" marker on the world layer, and at that strength over
+      // grass it was easy to lose entirely; a slow pulse costs nothing and the
+      // eye finds movement long before it finds a tint.
+      if (active) {
+        const breath = 0.08 + 0.035 * (0.5 + 0.5 * Math.sin(now * 1.5));
+        overlayLines.fill({ color: tintOf(UI.gold), alpha: breath });
+      }
       overlayLines.stroke({
         width: active ? 3 : 1.5,
-        color: active ? 0xd9622b : 0x3f3324,
+        color: active ? tintOf(UI.accent) : tintOf(UI.woodDark),
         alpha: active ? 0.95 : 0.3,
       });
     }
@@ -199,19 +284,16 @@ export function makeScene({ app, camera, atlas, ground }) {
         }
       };
       trace(3);
-      overlayLines.stroke({ width: 2, color: 0x1e2a18, alpha: 0.25 });
+      overlayLines.stroke({ width: 2, color: tintOf(UI.ink), alpha: 0.25 });
       trace(-6);
-      overlayLines.stroke({ width: 2, color: 0xa8763e, alpha: 1 });
+      overlayLines.stroke({ width: 2, color: tintOf(P.wood[1]), alpha: 1 });
       trace(-11);
-      overlayLines.stroke({ width: 2, color: 0xc08d4f, alpha: 1 });
+      overlayLines.stroke({ width: 2, color: tintOf(P.wood[2]), alpha: 1 });
     }
   }
 
   // ---- everything that stands up ------------------------------------------
   const visible = [];
-
-  /** Close enough to the tripod to be the one crouched over it. */
-  const AT_INSTRUMENT = 2.0;
 
   /**
    * Which frame of the surveyor to draw.
@@ -222,16 +304,26 @@ export function makeScene({ app, camera, atlas, ground }) {
    * mid-fold. Kneeling is a thing you do AT the instrument, so it is now
    * decided by where the player actually is.
    *
+   * "At the instrument" is `OCCUPY_RADIUS`, imported rather than restated. This
+   * used to carry its own copy of the rule at twice the distance, which put a
+   * whole metre-wide ring around every tripod where the surveyor was drawn
+   * crouched over an instrument the game would not let her sight through.
+   *
    * Standing still resolves to the idle breath rather than to walk frame 0,
    * which is what stopped the sprite looking like a photograph.
    */
   function characterKey(p, station) {
-    const atInstrument =
-      station &&
-      !p.moving &&
-      Math.hypot((station.trueE ?? station.E) - p.e, (station.trueN ?? station.N) - p.n) <= AT_INSTRUMENT;
-
-    if (atInstrument) return p.idleFrame ? 'char-kneel-idle' : 'char-kneel';
+    if (station && !p.moving) {
+      const sE = station.trueE ?? station.E;
+      const sN = station.trueN ?? station.N;
+      if (Math.hypot(sE - p.e, sN - p.n) <= OCCUPY_RADIUS) {
+        // She crouches facing the instrument, so the side is whichever way it
+        // lies from her. Standing exactly on it resolves east, arbitrarily but
+        // stably — a tie that flickered would be worse than a tie that picks.
+        const side = sE < p.e ? 'W' : 'E';
+        return p.idleFrame ? `char-kneel-${side}-idle` : `char-kneel-${side}`;
+      }
+    }
     if (p.moving) return `char-${p.facing}-${p.frame % 4}`;
     return p.idleFrame ? `char-${p.facing}-idle` : `char-${p.facing}-0`;
   }
@@ -279,7 +371,33 @@ export function makeScene({ app, camera, atlas, ground }) {
     return `${ent.look || 'owner-m0'}-${dir}-${breath ? 'idle' : '0'}`;
   }
 
-  function drawEntities(w, playerState, station, assistantState, now, surveyed) {
+  /**
+   * How gold each measured target is, keyed by entity id.
+   *
+   * Held here rather than on the entity: `world/` describes a valley, and how
+   * far through a colour transition a marker happens to be is pure
+   * presentation. Entries are dropped when their entity leaves the screen, so
+   * this cannot grow without bound over a long job.
+   */
+  const goldness = new Map();
+
+  function tintFor(ent, surveyed, hoverId, dt) {
+    const measured = Boolean(ent.targetable && surveyed?.has(ent.id));
+    let k = goldness.get(ent.id) ?? (measured ? 1 : 0);
+    if (measured && k < 1) k = Math.min(1, k + dt / SURVEYED_FADE);
+    else if (!measured && k > 0) k = Math.max(0, k - dt / SURVEYED_FADE);
+    if (k > 0) goldness.set(ent.id, k);
+    else goldness.delete(ent.id);
+
+    // The reticle's target lifts toward white. Applied over the gold rather
+    // than instead of it, so hovering something already measured still reads as
+    // hovered — otherwise the one class of thing you point at most would be the
+    // one class that never responds.
+    const base = k > 0 ? mixRgb(TINT_NONE, TINT_SURVEYED, k) : TINT_NONE;
+    return ent.id === hoverId ? mixRgb(base, TINT_HOVER, 0.65) : base;
+  }
+
+  function drawEntities(w, playerState, station, assistantState, now, surveyed, hoverId, dt) {
     const detail = camera.zoom >= DETAIL_ZOOM;
     const view = camera.viewRect(12);
     visible.length = 0;
@@ -307,7 +425,7 @@ export function makeScene({ app, camera, atlas, ground }) {
       // Sprites are pooled, so the tint must be reset every frame — otherwise
       // a marker's gold glow leaks onto whatever unrelated entity reuses its
       // sprite next.
-      sp.tint = ent.targetable && surveyed?.has(ent.id) ? TINT_SURVEYED : TINT_NONE;
+      sp.tint = tintFor(ent, surveyed, hoverId, dt);
     }
 
     // The instrument, when one is set up, and the surveyor.
@@ -326,6 +444,26 @@ export function makeScene({ app, camera, atlas, ground }) {
 
     // Park the leftovers rather than destroying them; next frame may want them.
     for (let i = entityUsed; i < entityPool.length; i++) entityPool[i].visible = false;
+  }
+
+  /**
+   * Stretch the cloud layer over whatever is on screen and drift it.
+   *
+   * The tile offset is anchored to WORLD coordinates rather than to the sprite,
+   * so the shadow stays over the same patch of ground while the camera pans —
+   * clouds that slid with the viewport would read as a smear on the lens.
+   */
+  function drawClouds(now) {
+    const view = camera.viewRect(4);
+    clouds.x = Math.round(view.minE * PX_PER_M);
+    clouds.y = Math.round(-view.maxN * PX_PER_M);
+    clouds.width = Math.ceil((view.maxE - view.minE) * PX_PER_M);
+    clouds.height = Math.ceil((view.maxN - view.minN) * PX_PER_M);
+    // `tilePosition` is measured in tile space, which `tileScale` then blows up
+    // — so both the world anchor and the drift have to be divided by it, or the
+    // shadow slides eight times too fast and detaches from the ground.
+    clouds.tilePosition.x = (-clouds.x + now * CLOUD_DRIFT_E) / CLOUD_SCALE;
+    clouds.tilePosition.y = (-clouds.y + now * CLOUD_DRIFT_N) / CLOUD_SCALE;
   }
 
   /**
@@ -348,8 +486,27 @@ export function makeScene({ app, camera, atlas, ground }) {
   }
 
   // ---- frame --------------------------------------------------------------
+  let lastNow = 0;
+
   function render(view) {
-    const { world: w, player, assistant, activeParcelId, station, light: lightState, now = 0, surveyed } = view;
+    const {
+      world: w,
+      player,
+      assistant,
+      activeParcelId,
+      station,
+      light: lightState,
+      now = 0,
+      surveyed,
+      hoverId = null,
+    } = view;
+
+    // Seconds since the previous frame, for anything that eases. Taken from the
+    // scene clock the caller already advances rather than from the wall clock,
+    // so a transition holds still while a dialog is open exactly as the crew
+    // does — and cannot leap when the tab comes back from the background.
+    const dt = Math.max(0, Math.min(0.1, now - lastNow));
+    lastNow = now;
 
     if (!w) {
       world.visible = false;
@@ -374,20 +531,39 @@ export function makeScene({ app, camera, atlas, ground }) {
     world.y = off.y;
 
     drawGround(w);
-    drawLines(w, activeParcelId);
-    drawEntities(w, player, station, assistant, now, surveyed);
+    drawLines(w, activeParcelId, now);
+    drawEntities(w, player, station, assistant, now, surveyed, hoverId, dt);
+    drawClouds(now);
 
     // Light pass, in screen space.
-    tint.width = camera.vw;
-    tint.height = camera.vh;
-    vignette.width = camera.vw;
-    vignette.height = camera.vh;
+    for (const sp of [tint, warm, vignette]) {
+      sp.width = camera.vw;
+      sp.height = camera.vh;
+    }
     if (lightState) {
       const [r, g, b] = lightState.tint;
       tint.tint = (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255);
       tint.alpha = 1;
+
+      const glow = warmPass(lightState);
+      if (glow) {
+        const [wr, wg, wb] = glow.rgb;
+        warm.tint =
+          (Math.round(wr * 255) << 16) | (Math.round(wg * 255) << 8) | Math.round(wb * 255);
+        warm.alpha = glow.alpha;
+      } else {
+        warm.alpha = 0;
+      }
+
+      // Wide open at midday, closing in at both ends of the day. A constant
+      // vignette frames every hour identically, which wastes the one cue that
+      // says the light is going.
+      const noon = 1 - Math.abs(lightState.t * 2 - 1);
+      vignette.alpha = VIGNETTE_EDGE + (VIGNETTE_DAY - VIGNETTE_EDGE) * noon;
     } else {
       tint.alpha = 0;
+      warm.alpha = 0;
+      vignette.alpha = VIGNETTE_DAY;
     }
   }
 
@@ -424,9 +600,92 @@ export function makeScene({ app, camera, atlas, ground }) {
   };
 }
 
+/**
+ * A seamlessly tiling field of soft dark blobs, for the cloud shadow.
+ *
+ * Every blob is drawn nine times, once per wrap of the tile, which is the
+ * cheapest way to get a pattern with no visible seam — and a seam is exactly
+ * what the eye finds first in something that drifts slowly across the screen.
+ */
+function makeClouds(PIXI) {
+  const S = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = S;
+  canvas.height = S;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, S, S);
+
+  // Each cloud is a CLUSTER of offset lobes, not one circle. A single radial
+  // gradient reads unmistakably as a polka dot however soft its edge is; four
+  // overlapping ones read as a shape with no particular geometry, which is what
+  // a cloud shadow is.
+  //
+  // Mostly clear sky between them on purpose. A pattern that covered the tile
+  // evenly would not be weather passing over the valley — it would be a
+  // permanent dimming of everything, which is strictly worse than no clouds.
+  //
+  // Fixed rather than random: the sky must not differ between two sessions of
+  // the same job, like every other archetype in the renderer.
+  const CLOUDS = [
+    { x: 0.20, y: 0.26, a: 0.95, lobes: [[0, 0, 0.17], [0.13, -0.05, 0.13], [-0.12, 0.06, 0.11], [0.06, 0.10, 0.10], [0.22, 0.05, 0.08]] },
+    { x: 0.70, y: 0.20, a: 0.72, lobes: [[0, 0, 0.13], [-0.10, -0.05, 0.10], [0.09, 0.04, 0.09], [0.02, -0.10, 0.07]] },
+    { x: 0.44, y: 0.62, a: 0.88, lobes: [[0, 0, 0.15], [0.12, 0.04, 0.11], [-0.11, -0.04, 0.10], [0.04, -0.10, 0.08]] },
+    { x: 0.88, y: 0.74, a: 0.62, lobes: [[0, 0, 0.11], [0.09, 0.04, 0.085], [-0.08, 0.02, 0.07]] },
+    { x: 0.06, y: 0.82, a: 0.70, lobes: [[0, 0, 0.12], [0.10, -0.04, 0.09], [-0.07, 0.05, 0.075]] },
+  ];
+
+  for (const cloud of CLOUDS) {
+    for (const [dx, dy, lobeR] of cloud.lobes) {
+      // Every lobe is drawn nine times, once per wrap of the tile. That is the
+      // cheapest way to a pattern with no seam, and a seam is the first thing
+      // the eye finds in something that drifts slowly across the screen.
+      for (let wx = -1; wx <= 1; wx++) {
+        for (let wy = -1; wy <= 1; wy++) {
+          const cx = (cloud.x + dx + wx) * S;
+          const cy = (cloud.y + dy + wy) * S;
+          const r = lobeR * S;
+          const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+          g.addColorStop(0, `rgba(96,104,120,${cloud.a})`);
+          g.addColorStop(0.55, `rgba(96,104,120,${cloud.a * 0.66})`);
+          g.addColorStop(1, 'rgba(96,104,120,0)');
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+  }
+
+  // Linear filtering, deliberately — the one texture in the game that must NOT
+  // be nearest-sampled. It is a gradient blown up several times, and pixel-snapping
+  // a soft shadow would give it a staircase edge.
+  return new PIXI.Texture({
+    source: new PIXI.CanvasSource({ resource: canvas, addressMode: 'repeat' }),
+  });
+}
+
+/** Blend two 24-bit colours, for tints that ease rather than switch. */
+function mixRgb(a, b, k) {
+  const ar = (a >> 16) & 255;
+  const ag = (a >> 8) & 255;
+  const ab = a & 255;
+  const br = (b >> 16) & 255;
+  const bg = (b >> 8) & 255;
+  const bb = b & 255;
+  return (
+    (Math.round(ar + (br - ar) * k) << 16) |
+    (Math.round(ag + (bg - ag) * k) << 8) |
+    Math.round(ab + (bb - ab) * k)
+  );
+}
+
 /** A soft radial darkening at the edges. Cheap, and it frames the scene. */
 function makeVignette(PIXI) {
-  const S = 256;
+  // 256 stretched across a 2560-pixel viewport is a ten-times blow-up of an
+  // 8-bit gradient, which bands visibly in the corners.
+  const S = 512;
   const canvas = document.createElement('canvas');
   canvas.width = S;
   canvas.height = S;

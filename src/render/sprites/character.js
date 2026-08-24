@@ -16,7 +16,7 @@
 // player's cannot drift apart the way two copies would.
 
 import { makePix, contactShadow, P } from './shared.js';
-import { resolveLook } from '../palette.js';
+import { resolveLook, EYE } from '../palette.js';
 
 const W = 24;
 const H = 34;
@@ -144,13 +144,13 @@ export function surveyor({ dir = 'S', frame = 0, pose = 'walk', look = null } = 
     pix.ellipse(headX, headCy - 0.5, 4.6, 4.2, L.hair[1]);
     pix.ellipse(headX - 1.4, headCy - 2, 2.6, 1.8, L.hair[2]);
   } else if (side) {
-    pix.px(headX + 2, headCy, '#2b2b2b');
+    pix.px(headX + 2, headCy, EYE);
     pix.ellipse(headX - 2.8, headCy - 1, 2.2, 2.6, L.hair[1]);
     // A hint of a jaw line.
     pix.px(headX + 4, headCy + 2, L.skin[0]);
   } else {
-    pix.px(headX - 2, headCy, '#2b2b2b');
-    pix.px(headX + 2, headCy, '#2b2b2b');
+    pix.px(headX - 2, headCy, EYE);
+    pix.px(headX + 2, headCy, EYE);
     pix.hline(headX - 1, headX + 1, headCy + 3, L.skin[0]);
     pix.ellipse(headX, headCy - 3.2, 4.4, 1.8, L.hair[1]);
   }
@@ -303,45 +303,166 @@ function drawPole(pix, x, baseY, topY) {
  * surveyor standing bolt upright next to a levelled instrument looks wrong to
  * anyone who has ever done it.
  *
+ * Drawn in profile facing east, which is the same view `surveyor()` calls
+ * `side` — so every helper below is given `side = true` and the roster mirrors
+ * the result for west. That is why this pose can share the head, the hat, the
+ * temples and the limb weight with the standing sprite instead of re-deriving
+ * them: it is the same character seen from the same angle, folded.
+ *
+ * This used to be its own little painter, drawn from flat rectangles with two
+ * steps of each ramp instead of three, a hat half a pixel low, and no temples
+ * at all — so walking up to the instrument swapped in a stockier, flatter
+ * figure whose hair colour had vanished. It read exactly like art from an older
+ * build, because that is what it was.
+ *
  * @param {boolean} idle  the top of a breath. This is the pose the player looks
  *        at for most of a job — every sight is taken from it — so it is the one
  *        that most needed to stop being a photograph. The folded legs and the
  *        hand on the screws stay put; only the back and head rise.
  */
-function kneeling(pix, cx, idle = false, L = resolveLook({})) {
+function kneeling(pix, cx, idle, L) {
   const baseY = 32;
   const lift = idle ? 1 : 0;
+  const fem = L.body === 'f';
+
+  // Down onto one knee, not into a squat: the back knee is on the ground, the
+  // front foot is planted, and the hips sit between them. That triangle is what
+  // makes the pose read as kneeling at a glance rather than as a wide stance.
+  const hipY = baseY - 8;
+  const shoulderY = baseY - 15 - lift;
+  const headCy = baseY - 19 - lift;
+  const headX = cx + 4;
+
+  // Bent well forward over the eyepiece — a much stronger lean than the standing
+  // sprite's, which is the other half of reading as a crouch. The breath lifts
+  // the top of the spine while the hips stay folded, so the back straightens a
+  // little rather than the whole body hopping.
+  const spineTopX = cx + 3;
+  const spineBotX = cx - 1;
+  const spineX = (y) => spineTopX + (spineBotX - spineTopX) * ((y - shoulderY) / (hipY - shoulderY));
+
   contactShadow(pix, cx, baseY + 1, 8, 2.5);
 
-  // Folded legs. Planted: a breath does not move the knees.
-  pix.fill(cx - 6, baseY - 6, 12, 5, L.trousers[1]);
-  pix.hline(cx - 6, cx + 5, baseY - 6, L.trousers[2]);
-  pix.ellipse(cx - 5, baseY - 1, 2.6, 1.8, L.boots[1]);
-  pix.ellipse(cx + 4, baseY - 1, 2.6, 1.8, L.boots[0]);
+  // Planted BEFORE the body, as in the standing pose, so a hand ends up in
+  // front of it. Behind her here: she is at the tribrach, facing east.
+  if (L.carriesPole) drawPole(pix, cx - 10, baseY, headCy - 6);
 
-  // Leaning forward over the instrument. The top of the back rises with the
-  // breath while the hips stay folded, so the spine straightens a little.
-  for (let y = baseY - 16 - lift; y <= baseY - 6; y++) {
-    const k = (y - (baseY - 16 - lift)) / (10 + lift);
-    const hw = 4.5 + k * 1.5;
-    pix.hline(Math.round(cx - hw + 1), Math.round(cx + hw + 1), y, L.shirt[1]);
-    pix.px(Math.round(cx - hw + 1), y, L.shirt[2]);
+  // ---- folded legs: the far one first, so the near one overlaps it --------
+  // One knee down and one foot planted, which is how you actually sit at a
+  // tribrach. Planted: a breath does not move the knees.
+  // Far leg: folded under, thigh dropping straight to a knee ON the ground and
+  // the shin trailing back along it.
+  drawFoldedLeg(pix, cx - 1, hipY, cx - 2, baseY - 2, cx - 7, baseY - 1, L.trousers[0], L.boots[0]);
+  // Near leg: thigh forward and level, shin straight down to a planted foot.
+  // Level-then-vertical is what makes it a kneel; anything diagonal is a lunge.
+  drawFoldedLeg(pix, cx - 1, hipY, cx + 4, hipY, cx + 5, baseY - 1, L.trousers[1], L.boots[1]);
+
+  // ---- far arm -----------------------------------------------------------
+  drawArm(pix, spineX(shoulderY) - 2, shoulderY, -1.5, L.shirt[0], L.skin);
+
+  // ---- torso -------------------------------------------------------------
+  // The same taper as the standing profile, tilted along the spine. The female
+  // silhouette is a narrower shoulder over a slightly wider hip — the taper
+  // reversed, and nothing else, exactly as above.
+  const halfTop = 3.5 - (fem ? 0.6 : 0);
+  const halfBot = 3 + (fem ? 0.5 : 0);
+  for (let y = shoulderY; y <= hipY; y++) {
+    const k = (y - shoulderY) / (hipY - shoulderY);
+    const waist = fem ? Math.sin(k * Math.PI) * 0.55 : 0;
+    const hw = halfTop + (halfBot - halfTop) * k - waist;
+    const bx = spineX(y);
+    pix.hline(Math.round(bx - hw), Math.round(bx + hw), y, L.shirt[1]);
+    pix.px(Math.round(bx - hw), y, L.shirt[2]);
+    pix.px(Math.round(bx + hw), y, L.shirt[0]);
   }
-  pix.fill(cx - 2, baseY - 15 - lift, 6, 7 + lift, L.vest[1]);
-  pix.hline(cx - 2, cx + 3, baseY - 12, L.vest[2]);
 
-  // Arm reaching to the tribrach screws. The hand stays ON the screws — it is
-  // holding something — so only the shoulder end travels.
-  pix.line(cx + 3, baseY - 14 - lift, cx + 8, baseY - 9, L.shirt[2]);
-  pix.disc(cx + 8, baseY - 9, 1.4, L.skin[1]);
+  if (L.wearsVest) {
+    const vestTop = shoulderY + 1;
+    const vestBot = hipY - 1;
+    const vw = 2;
+    for (let y = vestTop; y <= vestBot; y++) {
+      const bx = Math.round(spineX(y));
+      pix.hline(bx - vw + 1, bx + vw - 1, y, L.vest[1]);
+      pix.px(bx - vw + 1, y, L.vest[2]);
+    }
+    // The one reflective band, following the lean.
+    const bandY = vestTop + 4;
+    const bandX = Math.round(spineX(bandY));
+    pix.hline(bandX - vw, bandX + vw, bandY, L.vest[2]);
+    pix.hline(Math.round(spineX(bandY + 1)) - vw, Math.round(spineX(bandY + 1)) + vw, bandY + 1, L.vest[0]);
+  } else {
+    // A check, not a vest — two sparse crossing lines, as above.
+    for (let y = shoulderY + 2; y <= hipY - 1; y += 3) {
+      const bx = spineX(y);
+      pix.hline(Math.round(bx - halfTop + 1), Math.round(bx + halfTop - 1), y, L.vest[1]);
+    }
+    for (let y = shoulderY + 1; y <= hipY - 1; y++) {
+      pix.px(Math.round(spineX(y)) - 1, y, L.vest[1]);
+      pix.px(Math.round(spineX(y)) + 2, y, L.vest[0]);
+    }
+  }
 
-  const headCy = baseY - 20 - lift;
-  pix.disc(cx + 1, headCy, 4.6, L.skin[1]);
-  pix.disc(cx, headCy - 1, 2.6, L.skin[2]);
-  if (L.body === 'f') drawLongHair(pix, cx + 1, headCy, true, 'E', L.hair);
-  pix.px(cx + 3, headCy + 1, '#2b2b2b');
-  drawHat(pix, cx + 1, headCy - 3.5, true, L.hat);
+  // ---- near arm ----------------------------------------------------------
+  // Reaching to the tribrach screws. The hand stays ON the screws — it is
+  // holding something — so only the shoulder end travels with the breath.
+  drawReachingArm(pix, spineX(shoulderY) + 2, shoulderY + 2, cx + 8, baseY - 8, L.shirt[2], L.skin);
+
+  // ---- head --------------------------------------------------------------
+  // Identical to the standing profile, so the face does not change shape when
+  // the player crouches.
+  pix.disc(headX, headCy, 4.6, L.skin[1]);
+  pix.disc(headX - 1.4, headCy - 1.4, 2.6, L.skin[2]);
+  pix.ellipse(headX + 2, headCy + 1.8, 1.8, 1.6, L.skin[0]);
+
+  if (fem) drawLongHair(pix, headX, headCy, true, 'E', L.hair);
+
+  pix.px(headX + 2, headCy, EYE);
+  pix.ellipse(headX - 2.8, headCy - 1, 2.2, 2.6, L.hair[1]);
+  pix.px(headX + 4, headCy + 2, L.skin[0]);
+
+  drawTemples(pix, headX, headCy, true, 'E', L.hair);
+  drawHat(pix, headX, headCy - 4, true, L.hat);
 
   pix.outline('auto', { amount: 0.46 });
   return { pix, anchorX: 0.5, anchorY: (baseY + 1) / H };
+}
+
+/**
+ * A leg folded under a crouch, in profile: thigh from the hip to the knee, shin
+ * from the knee to the ground, boot at the end. Three pixels across like
+ * `drawLeg`, so the crouch and the stride carry the same weight.
+ */
+function drawFoldedLeg(pix, hipX, hipY, kneeX, kneeY, footX, footY, trouser, boot) {
+  limb(pix, hipX, hipY, kneeX, kneeY, trouser);
+  limb(pix, kneeX, kneeY, footX, footY, trouser);
+  pix.ellipse(footX, footY, 2, 1.4, boot);
+}
+
+/**
+ * An arm that ends somewhere specific — a hand on the tribrach screws rather
+ * than hanging at the side. Same three-pixel weight and same hand as `drawArm`.
+ */
+function drawReachingArm(pix, sx, sy, hx, hy, colour, skin) {
+  limb(pix, sx, sy, hx, hy, colour);
+  pix.disc(hx, hy, 1.4, skin[1]);
+}
+
+/**
+ * A three-pixel limb between two points.
+ *
+ * Thickened ACROSS the limb rather than along it: a near-horizontal thigh drawn
+ * with horizontal spans comes out one pixel tall, which is the flatness the old
+ * crouch had.
+ */
+function limb(pix, x0, y0, x1, y1, colour) {
+  const dx = Math.abs(x1 - x0);
+  const dy = Math.abs(y1 - y0);
+  const steps = Math.max(1, Math.round(Math.max(dx, dy)));
+  for (let i = 0; i <= steps; i++) {
+    const k = i / steps;
+    const x = Math.round(x0 + (x1 - x0) * k);
+    const y = Math.round(y0 + (y1 - y0) * k);
+    if (dy >= dx) pix.hline(x - 1, x + 1, y, colour);
+    else pix.vline(x, y - 1, y + 1, colour);
+  }
 }

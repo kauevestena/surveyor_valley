@@ -9,20 +9,27 @@ import { formatAngle, fmtMetres, DEG } from '../survey/units.js';
 import { aimReadout, circleDial } from '../survey/readout.js';
 import { t, angleFormat } from '../ui/i18n.js';
 import { KIND } from '../world/entities.js';
+import { UI, alpha, font } from './tokens.js';
 
+/**
+ * The instrumentation palette, derived from the house tokens rather than
+ * restated. The overlay used to carry near-misses of every one of these — a
+ * green that was not the interface's green, a red that was not its red — so a
+ * verdict on the canvas and the same verdict in a panel were different colours.
+ */
 const COL = {
-  ok: '#3f9d52',
-  marginal: '#e0a52e',
-  bad: '#cf3f34',
-  sight: '#2f6fb5',
-  blocked: '#cf3f34',
-  traverse: '#d9622b',
-  label: '#1f2a33',
-  labelBg: 'rgba(255,255,255,0.86)',
-  panel: 'rgba(247,234,208,0.94)',
-  panelEdge: '#5c3a1a',
-  ink: '#3b2a16',
-  inkSoft: '#6b5334',
+  ok: UI.green,
+  marginal: UI.amber,
+  bad: UI.red,
+  sight: UI.blue,
+  blocked: UI.red,
+  traverse: UI.accent,
+  label: UI.ink,
+  labelBg: alpha(UI.panel, 0.86),
+  panel: alpha(UI.panel, 0.94),
+  panelEdge: UI.woodDark,
+  ink: UI.ink,
+  inkSoft: UI.inkSoft,
 };
 
 /** Angles here honour the player's unit choice, exactly like every panel does. */
@@ -38,7 +45,7 @@ export function makeOverlays({ camera }) {
 
   function label(ctx, text, x, y, { anchor = 'center', size = 12, bold = false } = {}) {
     ctx.save();
-    ctx.font = `${bold ? '700 ' : ''}${size}px "Inter", system-ui, sans-serif`;
+    ctx.font = font(size, bold ? 700 : 400);
     ctx.textAlign = anchor;
     ctx.textBaseline = 'middle';
     const w = ctx.measureText(text).width;
@@ -289,7 +296,7 @@ export function makeOverlays({ camera }) {
     const noteH = blocked ? 17 * S : 0;
 
     ctx.save();
-    ctx.font = `600 ${Math.round(11 * S)}px "Inter", system-ui, sans-serif`;
+    ctx.font = font(Math.round(11 * S), 600);
     let textW = 0;
     for (const [k, v] of rows) textW = Math.max(textW, ctx.measureText(k).width + ctx.measureText(v).width + 26 * S);
     if (blocked) textW = Math.max(textW, ctx.measureText(t('readout.blocked')).width);
@@ -321,7 +328,7 @@ export function makeOverlays({ camera }) {
 
     ctx.textBaseline = 'middle';
     ctx.fillStyle = blocked ? COL.blocked : COL.sight;
-    ctx.font = `700 ${Math.round(11 * S)}px "Inter", system-ui, sans-serif`;
+    ctx.font = font(Math.round(11 * S), 700);
     ctx.textAlign = 'left';
     ctx.fillText(t('readout.title'), x + padX, y + padY + titleH / 2);
 
@@ -331,7 +338,7 @@ export function makeOverlays({ camera }) {
       ry += dialH;
     }
     for (const [k, v] of rows) {
-      ctx.font = `600 ${Math.round(11 * S)}px "Inter", system-ui, sans-serif`;
+      ctx.font = font(Math.round(11 * S), 600);
       ctx.fillStyle = COL.inkSoft;
       ctx.textAlign = 'left';
       ctx.fillText(k, x + padX, ry + rowH / 2);
@@ -344,7 +351,7 @@ export function makeOverlays({ camera }) {
     }
 
     if (blocked) {
-      ctx.font = `700 ${Math.round(11 * S)}px "Inter", system-ui, sans-serif`;
+      ctx.font = font(Math.round(11 * S), 700);
       ctx.fillStyle = COL.blocked;
       ctx.textAlign = 'left';
       ctx.fillText(t('readout.blocked'), x + padX, ry + noteH / 2);
@@ -418,7 +425,7 @@ export function makeOverlays({ camera }) {
     ctx.stroke();
     const nLabel = ray(dial.north, r + 9 * S);
     ctx.fillStyle = COL.ink;
-    ctx.font = `700 ${Math.round(10 * S)}px "Inter", system-ui, sans-serif`;
+    ctx.font = font(Math.round(10 * S), 700);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('N', nLabel.x, nLabel.y);
@@ -524,7 +531,7 @@ export function makeOverlays({ camera }) {
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = '#1f2a33';
-    ctx.font = '700 11px "Inter", system-ui, sans-serif';
+    ctx.font = font(11, 700);
     ctx.textAlign = 'center';
     ctx.fillText('N', x, y - 52);
 
@@ -545,7 +552,7 @@ export function makeOverlays({ camera }) {
     ctx.lineTo(x + px, y + 5);
     ctx.stroke();
     ctx.textAlign = 'center';
-    ctx.font = '600 11px "Inter", system-ui, sans-serif';
+    ctx.font = font(11, 600);
     ctx.fillText(`${metres} m`, x + px / 2, y + 15);
     ctx.restore();
   }
@@ -632,7 +639,7 @@ export function makeOverlays({ camera }) {
         ctx.setLineDash([4, 4]);
         ctx.stroke();
         ctx.setLineDash([]);
-        ctx.font = '800 15px "Inter", system-ui, sans-serif';
+        ctx.font = font(15, 800);
         ctx.fillStyle = COL.marginal;
         ctx.fillText('?', p.x, p.y + 0.5);
         label(ctx, c.label, p.x, p.y - 26, { size: 11 });

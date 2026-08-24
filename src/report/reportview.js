@@ -7,6 +7,7 @@
 import { el, clear } from './../ui/dom.js';
 import { t, num } from './../ui/i18n.js';
 import { fmtDuration } from '../survey/units.js';
+import { font } from '../render/tokens.js';
 
 /** Paint a DrawList (in millimetres) onto a canvas at the given pixels-per-mm. */
 export function drawListToCanvas(canvas, drawList, sheet, pxPerMm = 3.2) {
@@ -69,7 +70,7 @@ export function drawListToCanvas(canvas, drawList, sheet, pxPerMm = 3.2) {
 
       case 'text': {
         ctx.fillStyle = it.colour || '#000';
-        ctx.font = `${it.bold ? '700 ' : ''}${it.size}px "Inter", system-ui, sans-serif`;
+        ctx.font = font(it.size, it.bold ? 700 : 400);
         ctx.textAlign = it.align === 'center' ? 'center' : it.align === 'right' ? 'right' : 'left';
         ctx.textBaseline = 'middle';
         if (it.angle) {

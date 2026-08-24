@@ -12,11 +12,37 @@
 import { PX_PER_M } from './pixbuf.js';
 import { makePix, P } from './sprites/shared.js';
 import { hash2 } from './pixbuf.js';
+import { UI } from './tokens.js';
 
 const SWAY_RADIUS = 11; // metres of grass that reacts
 const SWAY_STEP = 1.5; // spacing of the animated tufts
 const MAX_PARTICLES = 90;
 const MAX_BUTTERFLIES = 3;
+const MAX_GLINTS = 14;
+
+/**
+ * Wind.
+ *
+ * The sway used to be one fixed sine, which meant the grass breathed at exactly
+ * the same rate forever — regular enough that the eye reads it as machinery
+ * rather than as weather. A gust is two slow sines beating against each other
+ * at frequencies with no common multiple, so the pattern never audibly repeats,
+ * plus a lull floor so the air is never completely still.
+ *
+ * `WIND_DIR` is the direction gusts push, in radians. Fixed for the valley:
+ * wind that changed direction while you watched would be a different and much
+ * larger feature, and every blade of grass agreeing about which way it is
+ * blowing is most of what sells this.
+ */
+const WIND_DIR = -0.55;
+const WIND_LULL = 0.35;
+
+/** 0..1, how hard it is blowing right now. */
+function gustAt(t) {
+  const a = Math.sin(t * 0.21);
+  const b = Math.sin(t * 0.37 + 1.3);
+  return WIND_LULL + (1 - WIND_LULL) * (0.5 + 0.5 * a * 0.6 + 0.5 * b * 0.4);
+}
 
 export function makeEffects({ PIXI, atlas, container, camera }) {
   let t = 0;
@@ -24,18 +50,34 @@ export function makeEffects({ PIXI, atlas, container, camera }) {
   // ---- extra textures, painted here because nothing else wants them -------
   const dustTex = texFrom(PIXI, () => {
     const p = makePix(5, 5);
-    p.ellipse(2.5, 2.5, 2.4, 2.0, '#cbbfa4');
-    p.ellipse(1.8, 1.8, 1.2, 1.0, '#e6dcc8');
+    p.ellipse(2.5, 2.5, 2.4, 2.0, P.dust[1]);
+    p.ellipse(1.8, 1.8, 1.2, 1.0, P.dust[2]);
     return p;
   });
 
   const sparkTex = texFrom(PIXI, () => {
     const p = makePix(3, 3);
-    p.px(1, 1, '#ffffff');
-    p.px(0, 1, '#f2c14e');
-    p.px(2, 1, '#f2c14e');
-    p.px(1, 0, '#f2c14e');
-    p.px(1, 2, '#f2c14e');
+    // The palette's brightest step rather than pure white: `palette.js` keeps a
+    // no-pure-white rule so nothing on screen is brighter than the sunlight,
+    // and a spark is the easiest place to break it by accident.
+    p.px(1, 1, P.spark[2]);
+    p.px(0, 1, P.spark[1]);
+    p.px(2, 1, P.spark[1]);
+    p.px(1, 0, P.spark[1]);
+    p.px(1, 2, P.spark[1]);
+    return p;
+  });
+
+  // A single bright dash. Water is baked into the chunk bitmap and so is
+  // completely static; a handful of these drifting across it is the cheapest
+  // thing that makes a lake look wet rather than painted.
+  const glintTex = texFrom(PIXI, () => {
+    const p = makePix(6, 3);
+    p.hline(1, 4, 1, P.foam[2]);
+    p.px(0, 1, P.foam[1]);
+    p.px(5, 1, P.foam[1]);
+    p.px(2, 0, P.foam[1]);
+    p.px(3, 2, P.foam[1]);
     return p;
   });
 
@@ -45,8 +87,8 @@ export function makeEffects({ PIXI, atlas, container, camera }) {
       const spread = frame === 0 ? 3 : 2;
       p.ellipse(3.5 - spread * 0.5, 2, spread * 0.5 + 0.6, 1.6, P.flower[1][2]);
       p.ellipse(3.5 + spread * 0.5, 2, spread * 0.5 + 0.6, 1.6, P.flower[1][1]);
-      p.px(3, 2, '#3a2a18');
-      p.px(3, 3, '#3a2a18');
+      p.px(3, 2, UI.ink);
+      p.px(3, 3, UI.ink);
       return p;
     }),
   );
@@ -88,7 +130,14 @@ export function makeEffects({ PIXI, atlas, container, camera }) {
 
         // Idle sway, plus a shove away from the player when they walk through.
         // The shove is the bit that sells it: the world reacts to you.
-        const idle = Math.sin(t * 1.7 + h * 24) * 0.055;
+        //
+        // The gust scales the amplitude AND adds a standing lean, so hard wind
+        // does not merely wave the grass faster — it holds it over. Position is
+        // folded into the phase so a field bends in travelling waves rather
+        // than all at once, which is the difference between wind and a wobble.
+        const gust = gustAt(t);
+        const wave = Math.sin(t * 1.7 + h * 24 + (e * 0.35 + n * 0.2));
+        const idle = wave * 0.055 * (0.5 + gust) + Math.sin(WIND_DIR) * gust * 0.09;
         const push = d < 1.6 ? (1 - d / 1.6) * 0.55 * Math.sign(e - player.e || 1) : 0;
         sprite.rotation = idle + push;
         // Fade out at the rim so tufts do not pop in as the player walks.
@@ -121,16 +170,44 @@ export function makeEffects({ PIXI, atlas, container, camera }) {
       retire(particles[dead]);
       particles.splice(dead, 1);
     }
-    const sprite = new PIXI.Sprite(texture);
-    sprite.anchor.set(0.5, 0.5);
-    container.addChild(sprite);
+    const sprite = takeParticleSprite(texture);
     const p = { sprite, e, n, ve: 0, vn: 0, life: 0, ttl: 0.7, spin: 0, grow: 0, drag: 2.6, ...opts };
     sprite.zIndex = -n;
     particles.push(p);
     return p;
   }
 
-  const retire = (p) => p.sprite.destroy();
+  /**
+   * Particle sprites are reused, not rebuilt.
+   *
+   * This file's own header promised "around eighty sprites, all pooled", and
+   * they were not: every `ping` allocated twelve Sprites and destroyed twelve
+   * more within half a second, which is a lot of garbage for the one effect
+   * that fires on the most common action in the game.
+   */
+  const spritePool = [];
+
+  function takeParticleSprite(texture) {
+    const s = spritePool.pop() || makeParticleSprite();
+    s.texture = texture;
+    s.visible = true;
+    s.alpha = 1;
+    s.rotation = 0;
+    s.scale.set(1);
+    return s;
+  }
+
+  function makeParticleSprite() {
+    const s = new PIXI.Sprite();
+    s.anchor.set(0.5, 0.5);
+    container.addChild(s);
+    return s;
+  }
+
+  function retire(p) {
+    p.sprite.visible = false;
+    spritePool.push(p.sprite);
+  }
 
   function updateParticles(dt) {
     for (let i = particles.length - 1; i >= 0; i--) {
@@ -195,17 +272,84 @@ export function makeEffects({ PIXI, atlas, container, camera }) {
     }
   }
 
+  // ---- water -------------------------------------------------------------
+  /**
+   * Glints on open water.
+   *
+   * Sampled against the terrain rather than against the baked chunks: the baker
+   * knows where the water is but it has already thrown the answer away into a
+   * bitmap, and `soilAt` is the same query the footstep sound and the tripod
+   * verdict both use. So a glint can only ever appear where the game agrees
+   * there is water.
+   *
+   * Each one lives a couple of seconds, fades in and out, then re-rolls
+   * somewhere else on screen — no state to keep, and nothing to clean up when
+   * the player walks away from the lake.
+   */
+  const glints = [];
+
+  function updateGlints(world, dt) {
+    const terrain = world?.terrain;
+    if (!terrain) return;
+
+    while (glints.length < MAX_GLINTS) {
+      const s = new PIXI.Sprite(glintTex);
+      s.anchor.set(0.5, 0.5);
+      s.blendMode = 'add';
+      s.visible = false;
+      container.addChild(s);
+      glints.push({ sprite: s, life: 0, ttl: 0, e: 0, n: 0 });
+    }
+
+    const view = camera.viewRect(2);
+    for (const g of glints) {
+      g.life += dt;
+      if (g.life >= g.ttl) {
+        // Re-roll. One sample per frame per glint, not a search: on a screen
+        // with no water they simply stay hidden, which costs nothing.
+        const e = view.minE + Math.random() * (view.maxE - view.minE);
+        const n = view.minN + Math.random() * (view.maxN - view.minN);
+        if (terrain.soilAt(e, n).id !== 'AGUA') {
+          g.sprite.visible = false;
+          g.life = 0;
+          g.ttl = 0.25;
+          continue;
+        }
+        g.e = e;
+        g.n = n;
+        g.life = 0;
+        g.ttl = 1.4 + Math.random() * 1.6;
+        g.sprite.x = Math.round(e * PX_PER_M);
+        g.sprite.y = Math.round(-n * PX_PER_M);
+        g.sprite.zIndex = -n;
+        g.sprite.visible = true;
+      }
+      if (!g.sprite.visible) continue;
+      // In and out on a single hump, so nothing ever pops.
+      const k = g.life / g.ttl;
+      g.sprite.alpha = Math.sin(k * Math.PI) * 0.55;
+      // A slow drift, as if the surface were moving under it.
+      g.sprite.x = Math.round((g.e + Math.sin(t * 0.7 + g.n) * 0.12) * PX_PER_M);
+    }
+  }
+
   // ---- public emitters ----------------------------------------------------
   let dustCooldown = 0;
 
   return {
-    /** @param {{player:object, running:boolean}} view */
-    update(dt, { player, running = false } = {}) {
+    /** @param {{player:object, running:boolean, world:object, paused:boolean}} view */
+    update(dt, { player, running = false, world = null, paused = false } = {}) {
       t += dt;
       if (!player) return;
 
+      // Plan mode hides this whole container, so everything below is work
+      // nobody can see — and worse, the sway would wander to an arbitrary phase
+      // while it was hidden and jump on the way back in.
+      if (paused) return;
+
       updateSway(player, dt);
       updateButterflies(player, dt);
+      updateGlints(world, dt);
 
       // Dust off the boots, but only when actually running.
       dustCooldown -= dt;
@@ -288,7 +432,7 @@ export function makeEffects({ PIXI, atlas, container, camera }) {
     },
 
     get stats() {
-      return { sway: swayPool.length, particles: particles.length, flies: flies.length };
+      return { sway: swayPool.length, particles: particles.length, pooled: spritePool.length, flies: flies.length, glints: glints.length };
     },
   };
 }

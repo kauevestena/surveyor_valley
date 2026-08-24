@@ -16,6 +16,7 @@
 //      pixel from one frame to the next.
 
 import { PX_PER_M } from './pixbuf.js';
+import { makeShake, easeInOutCubic, clamp01 } from './tween.js';
 
 /**
  * Screen pixels per metre.
@@ -30,6 +31,16 @@ export const ZOOM_MAX = ZOOM_LADDER[ZOOM_LADDER.length - 1];
 /** The default: a 42 x 26 m view, with a 48 x 68 px surveyor in the middle. */
 export const ZOOM_DEFAULT = 32;
 
+/**
+ * Knock strengths, in metres of throw at the default zoom.
+ *
+ * Small numbers: this is a thump you feel, not a screen shake you notice. A
+ * monument going into the ground gets the larger one because it is the player
+ * hitting something; a blocked sight is the world refusing, which is a smaller
+ * event even though it is the more annoying one.
+ */
+export const KNOCK = { thunk: 0.22, blocked: 0.14 };
+
 /** Below this the world container is hidden and the plan view takes over. */
 export const PLAN_MODE_ZOOM = 12;
 /** Below this, small scenery is skipped. */
@@ -39,7 +50,14 @@ export const DETAIL_ZOOM = 14;
 const BASE = 1 / PX_PER_M;
 const snap = (v) => Math.round(v / BASE) * BASE;
 
+/** How long `fit` takes to glide to what it framed. */
+const FIT_PAN_SECONDS = 0.28;
+
 export function makeCamera({ e = 320, n = 320, zoom = ZOOM_DEFAULT } = {}) {
+  const shake = makeShake();
+  /** An eased pan in progress, or null. */
+  let pan = null;
+
   const cam = {
     e,
     n,
@@ -84,10 +102,47 @@ export function makeCamera({ e = 320, n = 320, zoom = ZOOM_DEFAULT } = {}) {
      * Comes out integral because `cam.e` is snapped and `scale` is an integer.
      */
     containerOffset() {
+      // The shake is added HERE rather than to `cam.e`/`cam.n`, so it moves the
+      // picture without moving the camera: nothing downstream — culling, the
+      // overlay, a click turned back into metres — sees a position the player
+      // never travelled to. Rounded like everything else, or a knock would put
+      // the whole world permanently between two pixels.
       return {
-        x: Math.round(cam.vw / 2 - cam.e * cam.zoom),
-        y: Math.round(cam.vh / 2 + cam.n * cam.zoom),
+        x: Math.round(cam.vw / 2 - cam.e * cam.zoom + shake.e * cam.zoom),
+        y: Math.round(cam.vh / 2 + cam.n * cam.zoom + shake.n * cam.zoom),
       };
+    },
+
+    /**
+     * Advance the camera's own animations. Called once per fixed step.
+     *
+     * Separate from `follow` because these run whether or not the camera is
+     * following anything — a knock while standing at the instrument still has
+     * to decay, and a pan has to finish even if the player never moves.
+     */
+    tick(dt) {
+      shake.update(dt);
+      if (pan) {
+        pan.elapsed += dt;
+        const k = easeInOutCubic(clamp01(pan.elapsed / pan.duration));
+        cam.e = snap(pan.fromE + (pan.toE - pan.fromE) * k);
+        cam.n = snap(pan.fromN + (pan.toN - pan.fromN) * k);
+        cam.clampToBounds();
+        if (k >= 1) pan = null;
+      }
+    },
+
+    /**
+     * A knock. Magnitude is in metres of throw at the default zoom, scaled so a
+     * shake feels the same size zoomed in as zoomed out.
+     */
+    knock(magnitude) {
+      shake.kick(magnitude * (ZOOM_DEFAULT / cam.zoom));
+    },
+
+    /** Whatever else is happening, stop animating and be where you are told. */
+    cancelPan() {
+      pan = null;
     },
 
     /** World rectangle currently visible, with an optional margin in metres. */
@@ -108,6 +163,9 @@ export function makeCamera({ e = 320, n = 320, zoom = ZOOM_DEFAULT } = {}) {
      * keeps it from twitching while the player shuffles about setting up.
      */
     follow(target, dt, { deadZone = 1.2, stiffness = 8 } = {}) {
+      // A pan owns the camera until it finishes; otherwise the follow drags it
+      // back toward the player on every frame of the glide.
+      if (pan) return;
       const dE = target.e - cam.e;
       const dN = target.n - cam.n;
       const d = Math.hypot(dE, dN);
@@ -121,6 +179,7 @@ export function makeCamera({ e = 320, n = 320, zoom = ZOOM_DEFAULT } = {}) {
     },
 
     snapTo(target) {
+      pan = null;
       cam.e = target.e;
       cam.n = target.n;
       cam.clampToBounds();
@@ -220,10 +279,30 @@ export function makeCamera({ e = 320, n = 320, zoom = ZOOM_DEFAULT } = {}) {
       let best = 0;
       for (let i = 0; i < ZOOM_LADDER.length; i++) if (ZOOM_LADDER[i] <= want) best = i;
       cam.zoom = ZOOM_LADDER[best];
-      cam.e = (minE + maxE) / 2;
-      cam.n = (minN + maxN) / 2;
+
+      // The zoom lands immediately and the position glides.
+      //
+      // Only the position: the rungs are integer multiples of the art
+      // resolution and tweening between two of them would put the whole world
+      // on a fractional scale for the duration, which is the one thing this
+      // file exists to prevent. Sliding to the figure is most of the effect
+      // anyway — it was the teleport that read as a glitch.
+      const toE = (minE + maxE) / 2;
+      const toN = (minN + maxN) / 2;
+      if (Math.hypot(toE - cam.e, toN - cam.n) < 0.5) {
+        cam.e = toE;
+        cam.n = toN;
+        pan = null;
+      } else {
+        pan = { fromE: cam.e, fromN: cam.n, toE, toN, elapsed: 0, duration: FIT_PAN_SECONDS };
+      }
       cam.clampToBounds();
       return cam.zoom;
+    },
+
+    /** Whether an eased pan is running, so `follow` can keep its hands off. */
+    get panning() {
+      return pan !== null;
     },
 
     get planMode() {

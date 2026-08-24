@@ -12,7 +12,7 @@ import { randomSeed, makeRng } from './core/rng.js';
 
 import { buildWorld } from './world/world.js';
 
-import { makeCamera } from './render/camera.js';
+import { makeCamera, KNOCK } from './render/camera.js';
 import { makeAtlas } from './render/atlas.js';
 import { makeGroundBaker } from './render/groundbake.js';
 import { makeOverlays } from './render/overlays.js';
@@ -109,7 +109,7 @@ let running = false;
 /** The look the atlas sheet was painted with, so a changed one repaints it. */
 let builtLook = null;
 
-const modals = makeModalHost(root);
+const modals = makeModalHost(root, { sfx: (kind) => audio.panel(kind === 'open') });
 const notifier = makeNotifier(root);
 
 // A failed autosave is otherwise silent: the game keeps playing and the
@@ -236,6 +236,7 @@ function buildView(alpha = 1) {
     tripodCheck,
     lang: lang(),
     showCornerLabels: tools.active === TOOL.VISADA,
+    hoverId: hoverTarget?.id ?? null,
     light: lightAt(dayFraction(svc)),
     now: sceneClock,
   };
@@ -374,6 +375,7 @@ const loop = makeLoop({
     // stops following while you are set up and still, and resumes the moment
     // you walk. This is the difference between "you must stand here" being a
     // rule and being a cage.
+    camera.tick(dt);
     if (!lookingAround()) camera.follow(player, dt);
     store.tickService(dt);
     checkSedeArrival();
@@ -384,7 +386,7 @@ const loop = makeLoop({
       audio.step(world.terrain.soilAt(player.e, player.n).id);
     }
 
-    effects?.update(dt, { player, running: intent.run && player.moving });
+    effects?.update(dt, { player, world, running: intent.run && player.moving, paused: camera.planMode });
 
     discoveryAcc += dt;
     if (discoveryAcc > 0.25) {
@@ -746,7 +748,6 @@ function doSetupStation() {
 
   const needsDatum = s.network.every((cp) => cp.E == null);
 
-  audio.click();
   showStationDialog({
     modals,
     candidates,
@@ -1377,7 +1378,6 @@ const formatDetail = (d) => ({
 });
 
 function openShop() {
-  audio.click();
   return showShop({
     modals,
     store,
@@ -1388,7 +1388,6 @@ function openShop() {
 
 /** Back to the job board, or the end of the campaign if all six are done. */
 function nextJob() {
-  audio.click();
   const s = store.get();
   const remaining = world.parcels.filter((p) => s.parcels?.[p.id]?.status !== 'done');
 
@@ -1708,6 +1707,7 @@ async function restoreGame(saved) {
 bus.on(EV.LOS_BLOCKED, ({ from, to, at }) => {
   overlays.flashBlocked(from, to, at);
   audio.blocked();
+  camera.knock(KNOCK.blocked);
 });
 
 bus.on(EV.NOTIFY, ({ kind, key, params }) => {
@@ -1720,6 +1720,7 @@ bus.on(EV.NOTIFY, ({ kind, key, params }) => {
 // silent change to a number somewhere else on screen.
 bus.on(EV.MARCO_PLACED, (m) => {
   audio.thunk();
+  camera.knock(KNOCK.thunk);
   if (m) effects?.thunk(m.e ?? m.trueE, m.n ?? m.trueN);
 });
 
@@ -1735,6 +1736,12 @@ bus.on(EV.TRAVERSE_COMPUTED, (tr) => {
 });
 
 bus.on(EV.SERVICE_FINISHED, () => audio.complete());
+
+bus.on(EV.SERVICE_STARTED, () => audio.begin());
+
+// The checklist advancing is the game telling you that you got something right,
+// and it was the one piece of progress feedback with no sound at all.
+bus.on(EV.TUTORIAL, () => audio.tick());
 
 bus.on(EV.LANG_CHANGED, () => {
   toolbar.rebuildLabels();

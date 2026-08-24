@@ -30,11 +30,18 @@ export const P = {
   rock: ramp('#96958d', 3),
   rockMoss: ramp('#6f8455', 3),
 
+  /** Kicked-up dirt, and the bright end of a spark. */
+  dust: ramp('#cbbfa4', 3),
+  spark: ramp('#f2c14e', 3, { spread: 0.2 }),
+
   water: ramp('#3f92c4', 3),
   waterDeep: ramp('#2c6f9e', 3),
   foam: ramp('#cfe9f5', 3),
 
-  wood: ramp('#a8763e', 3),
+  // Cooler and greyer than `soil`, which it used to be an exact copy of — so a
+  // fence rail was painted the identical colour to the bare earth it stands in,
+  // and a wooden post vanished against a ploughed field.
+  wood: ramp('#9c7a4e', 3),
   woodDark: ramp('#7a5227', 3),
   concrete: ramp('#cfc9ba', 3),
   metal: ramp('#adb6bd', 3),
@@ -139,6 +146,13 @@ export const HAT_STYLES = [
 
 /** What a fresh player looks like before they touch anything. */
 export const DEFAULT_LOOK = { body: 'm', skin: 1, hair: 0, hat: 0 };
+
+/**
+ * Eyes. Named rather than a ramp: at this scale an eye is exactly one pixel, so
+ * there is no shadow step to have — but it was written inline in three places
+ * in `character.js`, which is how the crouch ended up with its own copy.
+ */
+export const EYE = '#2b2b2b';
 
 /**
  * Resolve a saved look into the actual colour ramps the painter needs.
@@ -278,6 +292,39 @@ export const DAYLIGHT = [
   { t: 1.0, tint: [0.66, 0.62, 0.80], warm: [0.06, 0.0, 0.04] }, // 18:00 dusk
 ];
 
+/**
+ * How hard the additive warmth pushes.
+ *
+ * `DAYLIGHT` stores warmth as a small linear amount per channel. This is the
+ * factor that turns it into light on screen.
+ *
+ * Tuned against a real render rather than guessed, because the table's warmth
+ * had never been painted before and so had never been checked: at 1.8 golden
+ * hour flattens the ploughed field to one orange and the hi-vis vest stops
+ * being the most saturated thing on screen, which is the one job it has. At 1
+ * the sun is unmistakable and the greens survive it.
+ */
+export const WARM_GAIN = 1.0;
+
+/**
+ * The additive half of a light state, renormalised for painting.
+ *
+ * The table's amounts are a colour and a strength multiplied together, but a
+ * painter wants them apart: dividing out the largest channel gives a full-
+ * strength hue plus an alpha, so a warmth of 0.12 paints at twelve percent of a
+ * bright colour rather than at twelve percent of a colour that is itself twelve
+ * percent bright.
+ *
+ * @returns {{rgb:number[], alpha:number}|null} null when there is no warmth
+ */
+export function warmPass(light) {
+  const w = light?.warm;
+  if (!w) return null;
+  const peak = Math.max(w[0], w[1], w[2]);
+  if (!(peak > 0.001)) return null;
+  return { rgb: [w[0] / peak, w[1] / peak, w[2] / peak], alpha: Math.min(1, peak * WARM_GAIN) };
+}
+
 /** Interpolate the daylight table. `t` is 0 at 07:00, 1 at 18:00. */
 export function lightAt(t) {
   t = Math.max(0, Math.min(1, t));
@@ -294,6 +341,8 @@ export function lightAt(t) {
   const k = (t - a.t) / span;
   const mix = (u, v) => u + (v - u) * k;
   return {
+    /** Carried through so the renderer can vary anything else by hour. */
+    t,
     tint: [mix(a.tint[0], b.tint[0]), mix(a.tint[1], b.tint[1]), mix(a.tint[2], b.tint[2])],
     warm: [mix(a.warm[0], b.warm[0]), mix(a.warm[1], b.warm[1]), mix(a.warm[2], b.warm[2])],
   };

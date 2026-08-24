@@ -10,12 +10,14 @@ import assert from 'node:assert/strict';
 
 import { makePix, ramp, rgba, rgbToHsl, hash2, PX_PER_M } from '../src/render/pixbuf.js';
 import { buildSprites, buildGroundSprites } from '../src/render/sprites/index.js';
-import { SKIN_TONES, HAIR_TONES, HAT_STYLES, OWNER_LOOKS } from '../src/render/palette.js';
+import { SKIN_TONES, HAIR_TONES, HAT_STYLES, OWNER_LOOKS, resolveLook } from '../src/render/palette.js';
 import { classGrid, paintBase, paintDetail, shadeField } from '../src/render/groundpaint.js';
 import { makeTerrain } from '../src/world/terrain.js';
 import { buildWorld } from '../src/world/world.js';
 import { DIFFICULTY } from '../src/core/state.js';
 import { makeCamera, ZOOM_LADDER, ZOOM_DEFAULT } from '../src/render/camera.js';
+import { UI, UI_FONT, alpha, tintOf } from '../src/render/tokens.js';
+import fs from 'node:fs';
 
 // ------------------------------------------------------------ the painter ---
 
@@ -130,7 +132,14 @@ test('sprite keys the scene asks for all exist', () => {
     for (let f = 0; f < 4; f++) assert.ok(keys.has(`char-${dir}-${f}`), `char-${dir}-${f} missing`);
     assert.ok(keys.has(`char-${dir}-idle`), `char-${dir}-idle missing`);
   }
-  for (const k of ['char-kneel', 'char-kneel-idle', 'marco', 'station', 'prism', 'poste', 'divisa-0']) {
+  // The crouch is directional too. It used to be a single east-facing pose, so
+  // walking to the tripod from the west spun the surveyor round to face away
+  // from the instrument she was supposedly operating.
+  for (const side of ['E', 'W']) {
+    assert.ok(keys.has(`char-kneel-${side}`), `char-kneel-${side} missing`);
+    assert.ok(keys.has(`char-kneel-${side}-idle`), `char-kneel-${side}-idle missing`);
+  }
+  for (const k of ['marco', 'station', 'prism', 'poste', 'divisa-0']) {
     assert.ok(keys.has(k), `${k} missing`);
   }
   // Ligeirinho carries the same roster minus the kneel: the tribrach is at the
@@ -279,10 +288,98 @@ test('the idle pose actually differs from standing still', () => {
     assert.notEqual(idle.pix.hash(), rest.pix.hash(), `char-${dir}-idle is identical to the rest pose`);
     assert.equal(idle.anchorY, rest.anchorY, `char-${dir}-idle must keep its feet on the ground`);
   }
-  const kneel = byKey.get('char-kneel');
-  const kneelIdle = byKey.get('char-kneel-idle');
-  assert.notEqual(kneelIdle.pix.hash(), kneel.pix.hash(), 'the kneeling breath changes nothing');
-  assert.equal(kneelIdle.anchorY, kneel.anchorY);
+  for (const side of ['E', 'W']) {
+    const kneel = byKey.get(`char-kneel-${side}`);
+    const kneelIdle = byKey.get(`char-kneel-${side}-idle`);
+    assert.notEqual(kneelIdle.pix.hash(), kneel.pix.hash(), 'the kneeling breath changes nothing');
+    assert.equal(kneelIdle.anchorY, kneel.anchorY);
+  }
+  // West is east mirrored, and mirroring is the whole of the difference.
+  const east = byKey.get('char-kneel-E');
+  const west = byKey.get('char-kneel-W');
+  assert.equal(west.pix.hash(), east.pix.mirrorX().hash(), 'char-kneel-W is not char-kneel-E mirrored');
+  assert.equal(west.anchorY, east.anchorY, 'the mirror lifted her off the ground');
+});
+
+/**
+ * The crouch is a pose of the SAME character, not a second one.
+ *
+ * This is the regression test for a bug that survived several releases: the
+ * kneeling painter was written before the look system and never revisited, so
+ * walking up to the tripod swapped in a figure that ignored the vest, the body,
+ * three quarters of every colour ramp, and — because it never drew the temples
+ * — the hair colour the player had chosen. It read as art from an older build,
+ * which is exactly what it was.
+ *
+ * Everything below is asserted against `char-S-0` in the look test above and
+ * was asserted against nothing at all here, which is why nobody caught it.
+ */
+test('the crouch honours every look the standing sprite does', () => {
+  const kneelOf = (look) => buildSprites(look).find((x) => x.key === 'char-kneel-E');
+  const base = kneelOf({ body: 'm', skin: 1, hair: 0, hat: 0 });
+  assert.ok(base.pix.bounds(), 'the crouch painted nothing');
+
+  const distinct = (label, looks) => {
+    const seen = new Map();
+    for (const [name, look] of looks) {
+      const s = kneelOf(look);
+      assert.ok(s.pix.bounds(), `${label} ${name} painted nothing`);
+      assert.equal(s.anchorY, base.anchorY, `${label} ${name} moved the ground line`);
+      assert.ok(!seen.has(s.pix.hash()), `${label} ${name} paints identically to ${seen.get(s.pix.hash())}`);
+      seen.set(s.pix.hash(), name);
+    }
+  };
+
+  distinct('skin', SKIN_TONES.map((_, i) => [i, { body: 'm', skin: i, hair: 0, hat: 0 }]));
+  distinct('hat', HAT_STYLES.map((_, i) => [i, { body: 'm', skin: 1, hair: 0, hat: i }]));
+  // The one that was actually invisible: a hat covers the crown, not the sides,
+  // so a crouch that skips the temples shows no hair colour at all.
+  distinct('hair', HAIR_TONES.map((_, i) => [i, { body: 'm', skin: 1, hair: i, hat: 0 }]));
+  distinct('body', [
+    ['m', { body: 'm', skin: 1, hair: 0, hat: 0 }],
+    ['f', { body: 'f', skin: 1, hair: 0, hat: 0 }],
+  ]);
+
+  // Painting it twice must give the same pixels, like every other sprite.
+  assert.equal(kneelOf({ body: 'm', skin: 1, hair: 0, hat: 0 }).pix.hash(), base.pix.hash());
+});
+
+/**
+ * The crouch uses whole ramps, not the light half of each one.
+ *
+ * The old painter reached for `[1]` and `[2]` of skin, shirt and vest and never
+ * `[0]` — the entire shadow end — which is why the crouch read as flatter and
+ * rounder-headed than the sprite it replaced. Asserting every step of every
+ * ramp lands on at least one pixel is the cheapest thing that catches a painter
+ * quietly dropping back to two-tone.
+ */
+test('the crouch is shaded with the full ramps, not half of each', () => {
+  const look = resolveLook({ body: 'm', skin: 1, hair: 0, hat: 0 });
+  const byKey = new Map(buildSprites({ body: 'm', skin: 1, hair: 0, hat: 0 }).map((s) => [s.key, s]));
+
+  const present = (key) => {
+    const { pix } = byKey.get(key);
+    const out = new Set();
+    for (let i = 0; i < pix.data.length; i += 4) {
+      if (pix.data[i + 3] < 255) continue;
+      out.add(`#${[0, 1, 2].map((k) => pix.data[i + k].toString(16).padStart(2, '0')).join('')}`);
+    }
+    return out;
+  };
+
+  const crouched = present('char-kneel-E');
+  const standing = present('char-E-0');
+
+  // Measured against the profile rather than against the ramp, because the
+  // profile does not use every step of every ramp either — a leg gets one
+  // trouser colour, not three. The claim is that the crouch is shaded no more
+  // cheaply than the sprite it interrupts, which is the thing that broke.
+  for (const part of ['skin', 'hair', 'shirt', 'vest', 'trousers', 'boots']) {
+    look[part].forEach((colour, step) => {
+      if (!standing.has(colour)) return;
+      assert.ok(crouched.has(colour), `the profile shades with ${part}[${step}] (${colour}); the crouch does not`);
+    });
+  }
 });
 
 // ------------------------------------------------------------- the ground ---
@@ -521,4 +618,53 @@ test('Ligeirinho is still a different person from the look most like his', () =>
     assert.notEqual(him.pix.hash(), me.pix.hash(), `aux-${dir}-0 is indistinguishable from that player`);
     assert.equal(him.anchorY, me.anchorY, 'and stands on the same ground line');
   }
+});
+
+// --------------------------------------------------------------- tokens ---
+
+/**
+ * The house colours exist twice — as CSS custom properties for the DOM and as
+ * `tokens.js` for the two canvases — because a canvas cannot read a CSS
+ * variable without a `getComputedStyle` per draw. Duplication that nothing
+ * checks is duplication that drifts, and this one had: the overlay carried a
+ * green that was not the interface's green, a red that was not its red, and
+ * three different golds meant "surveyed or valuable".
+ */
+test('the JS tokens and the CSS custom properties have not drifted apart', () => {
+  const css = fs.readFileSync(new URL('../styles/base.css', import.meta.url), 'utf8');
+  const root = css.slice(css.indexOf(':root'), css.indexOf('}', css.indexOf(':root')));
+  const declared = new Map();
+  for (const m of root.matchAll(/--([a-z-]+):\s*([^;]+);/g)) declared.set(m[1], m[2].trim());
+
+  const pairs = {
+    panel: 'panel', 'panel-alt': 'panelAlt', wood: 'wood', 'wood-light': 'woodLight',
+    'wood-dark': 'woodDark', ink: 'ink', 'ink-soft': 'inkSoft', 'ink-faint': 'inkFaint',
+    line: 'line', accent: 'accent', 'accent-dark': 'accentDark', gold: 'gold',
+    green: 'green', amber: 'amber', red: 'red', blue: 'blue',
+  };
+  for (const [cssName, jsName] of Object.entries(pairs)) {
+    assert.ok(declared.has(cssName), `--${cssName} is missing from base.css`);
+    assert.equal(
+      UI[jsName].toLowerCase(),
+      declared.get(cssName).toLowerCase(),
+      `--${cssName} and UI.${jsName} disagree`,
+    );
+  }
+
+  // The font too: the canvases asked for "Inter" for a long time, which is not
+  // loaded anywhere, so world labels silently fell back to system-ui while the
+  // DOM around them rendered in ui-rounded.
+  assert.equal(UI_FONT, declared.get('font'), 'the canvas font is not --font');
+
+  // Every custom property `game.css` reaches for must actually exist, or it
+  // renders as its fallback forever and nobody notices.
+  const game = fs.readFileSync(new URL('../styles/game.css', import.meta.url), 'utf8');
+  const used = new Set([...game.matchAll(/var\(--([a-z-]+)/g)].map((m) => m[1]));
+  const undeclared = [...used].filter((v) => !declared.has(v) && !v.startsWith('safe-'));
+  assert.deepEqual(undeclared, [], 'game.css uses custom properties that base.css never defines');
+});
+
+test('the token helpers produce what a canvas and Pixi actually want', () => {
+  assert.equal(alpha('#f2b93c', 0.16), 'rgba(242, 185, 60, 0.16)');
+  assert.equal(tintOf('#f2b93c'), 0xf2b93c);
 });

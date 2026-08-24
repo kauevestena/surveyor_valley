@@ -7,7 +7,17 @@
 import { el, clear, trapFocus } from './dom.js';
 import { t } from './i18n.js';
 
-export function makeModalHost(root) {
+/**
+ * @param {Node} root
+ * @param {object} [opts]
+ * @param {(kind:string) => void} [opts.sfx]
+ *        A dialog opening or closing is one of the few things the player does
+ *        that used to be completely silent, and every panel in the game goes
+ *        through here — so one callback in this file sounds the field book, the
+ *        calculations, the shop, the job board and the station dialog at once.
+ *        Passed in rather than imported, so `ui/` stays free of the audio graph.
+ */
+export function makeModalHost(root, { sfx = null } = {}) {
   const stack = [];
 
   const backdrop = el('div.modal-backdrop', { hidden: true });
@@ -21,6 +31,7 @@ export function makeModalHost(root) {
     const idx = handle ? stack.findIndex((s) => s.handle === handle) : stack.length - 1;
     if (idx < 0) return;
     const [entry] = stack.splice(idx, 1);
+    sfx?.('close');
     entry.release?.();
     entry.node.remove();
     entry.onClose?.();
@@ -83,6 +94,7 @@ export function makeModalHost(root) {
     );
 
     root.append(node);
+    sfx?.('open');
     backdrop.hidden = false;
     document.body.classList.add('modal-open');
 

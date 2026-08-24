@@ -302,6 +302,13 @@
 }
 
 .toast {
+  /* Removing a toast used to make the others jump to their new positions in
+     one frame. Animating the box the toast occupies, not just its opacity,
+     lets the stack close up instead. */
+  transition:
+    opacity 0.22s ease,
+    transform 0.22s ease,
+    margin-top 0.22s ease;
   background: var(--wood-dark);
   border: 3px solid var(--wood-shadow);
   color: #fff5e2;
@@ -312,7 +319,7 @@
   box-shadow: 0 4px 0 rgba(40, 24, 8, 0.5);
   opacity: 0;
   transform: translateY(8px);
-  transition: opacity 0.22s ease, transform 0.22s ease;
+  margin-top: -2.1rem;
   max-width: min(560px, 84vw);
   text-align: center;
 }
@@ -320,6 +327,7 @@
 .toast-in {
   opacity: 1;
   transform: translateY(0);
+  margin-top: 0;
 }
 
 .toast-warn {
@@ -351,6 +359,22 @@
   border: 3px solid #8a6413;
   color: #3a2a06;
   box-shadow: 0 3px 0 rgba(40, 24, 8, 0.45);
+}
+
+/* `notify.js` has always set `banner-${kind}`, and only `.banner` existed — so
+   "you are out of monuments" and "the traverse did not close" were painted the
+   same gold as a passing hint. The banner channel is for things that are STILL
+   TRUE, so it is worth knowing at a glance how bad the standing state is. */
+.banner-error {
+  background: var(--red);
+  border-color: #7d2418;
+  color: #ffe9e4;
+}
+
+.banner-info {
+  background: var(--panel);
+  border-color: var(--line-strong);
+  color: var(--ink);
 }
 
 /* --------------------------------------------------------------- intro -- */
@@ -790,7 +814,7 @@
 
 /* A hint that is a caveat rather than an aside. */
 .hint.is-warn {
-  color: var(--warn, #8a5a12);
+  color: var(--warn);
   font-weight: 650;
 }
 

@@ -97,8 +97,15 @@ export function buildSprites(look = null) {
 
   // Only the player kneels: the tribrach is hers, and Ligeirinho is at the
   // other end of the sight holding the pole.
-  add('char-kneel', surveyor({ pose: 'kneel', look: playerLook }));
-  add('char-kneel-idle', surveyor({ pose: 'kneel-idle', look: playerLook }));
+  //
+  // Painted facing east and mirrored for west, exactly as the walk cycle is.
+  // The crouch used to have no direction at all, so approaching the tripod from
+  // the west spun the surveyor round to face away from it.
+  for (const [pose, suffix] of [['kneel', ''], ['kneel-idle', '-idle']]) {
+    const east = surveyor({ pose, look: playerLook });
+    add(`char-kneel-E${suffix}`, east);
+    add(`char-kneel-W${suffix}`, { pix: east.pix.mirrorX(), anchorX: 0.5, anchorY: east.anchorY });
+  }
 
   // ---- the kit ------------------------------------------------------------
   add('marco', playerMarco());

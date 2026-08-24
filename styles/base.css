@@ -58,6 +58,9 @@ body {
   --green: #4a8f36;
   --green-soft: #dff0cf;
   --amber: #e0a52e;
+  /* Amber is the fill; this is amber dark enough to be read as TEXT on
+     parchment. `game.css` referenced it for a year with only a fallback. */
+  --warn: #8a5a12;
   --red: #c4402f;
   --red-soft: #f8dcd6;
   --blue: #35709e;

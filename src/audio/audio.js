@@ -18,6 +18,11 @@
 
 const AMBIENT_KEY = 'sv.audio';
 
+/** Bus levels. Named because each is now set from two places. */
+const MASTER_GAIN = 0.9;
+const MUSIC_GAIN = 0.14;
+const SFX_GAIN = 0.85;
+
 /** A pentatonic scale, in semitones from the root. Nothing can sound wrong. */
 const PENTATONIC = [0, 2, 4, 7, 9, 12, 14, 16];
 const ROOT_HZ = 220; // A3
@@ -80,15 +85,15 @@ export function makeAudio() {
     }
 
     master = ctx.createGain();
-    master.gain.value = settings.muted ? 0 : 0.9;
+    master.gain.value = settings.muted ? 0 : MASTER_GAIN;
     master.connect(ctx.destination);
 
     musicGain = ctx.createGain();
-    musicGain.gain.value = settings.music ? 0.14 : 0;
+    musicGain.gain.value = settings.music ? MUSIC_GAIN : 0;
     musicGain.connect(master);
 
     sfxGain = ctx.createGain();
-    sfxGain.gain.value = 0.85;
+    sfxGain.gain.value = SFX_GAIN;
     sfxGain.connect(master);
 
     // One second of white noise, reused for every percussive sound.
@@ -97,6 +102,11 @@ export function makeAudio() {
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
 
     started = true;
+    // A context created outside a user gesture is born suspended, and `?start=1`
+    // boots the game without one. Resuming here rather than waiting for a
+    // `visibilitychange` to happen along is the difference between a silent
+    // session and a noisy one.
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     scheduleAmbient();
     scheduleBirds();
     return true;
@@ -104,6 +114,22 @@ export function makeAudio() {
 
   const now = () => ctx.currentTime;
   const ok = () => started && ctx && ctx.state !== 'closed' && !settings.muted;
+
+  /**
+   * Move a bus to a new level without a click.
+   *
+   * A gain assigned outright is a step discontinuity in the waveform, which is
+   * a click — audible on every mute and unmute, and loudest exactly when
+   * somebody is muting because the room has gone quiet.
+   */
+  const RAMP = 0.02;
+  function rampTo(node, value) {
+    if (!node || !ctx) return;
+    const t = now();
+    node.gain.cancelScheduledValues(t);
+    node.gain.setValueAtTime(node.gain.value, t);
+    node.gain.linearRampToValueAtTime(value, t + RAMP);
+  }
 
   /** A filtered noise burst: footsteps, thunks, anything percussive. */
   function noise({ cut = 1500, q = 1, gain = 0.06, decay = 0.08, type = 'bandpass', dest = null }) {
@@ -225,13 +251,13 @@ export function makeAudio() {
     setMuted(v) {
       settings.muted = Boolean(v);
       save();
-      if (master) master.gain.value = settings.muted ? 0 : 0.9;
+      rampTo(master, settings.muted ? 0 : MASTER_GAIN);
     },
 
     setMusic(v) {
       settings.music = Boolean(v);
       save();
-      if (musicGain) musicGain.gain.value = settings.music ? 0.14 : 0;
+      rampTo(musicGain, settings.music ? MUSIC_GAIN : 0);
     },
 
     /**
@@ -308,6 +334,42 @@ export function makeAudio() {
     /** Interface click. */
     click() {
       noise({ cut: 2600, q: 3, gain: 0.03, decay: 0.035 });
+    },
+
+    /**
+     * A panel opening or closing.
+     *
+     * Every dialog in the game was silent — the field book, the calculations,
+     * the shop, the job board — which made opening one feel like the screen had
+     * changed by itself. Soft and wooden rather than a chime: a panel is
+     * furniture, not an achievement, and it happens often enough that anything
+     * brighter would wear out within a job.
+     */
+    panel(opening = true) {
+      noise({ cut: opening ? 1600 : 1200, q: 2, gain: 0.035, decay: 0.05, type: 'lowpass' });
+      tone({
+        freq: semi(opening ? 5 : 0),
+        type: 'triangle',
+        gain: 0.045,
+        decay: 0.1,
+        bend: opening ? 1.18 : 0.84,
+      });
+    },
+
+    /**
+     * A job accepted. Deliberately smaller than `fanfare` and `complete`: this
+     * is the start of the work, and a flourish here would spend the reward the
+     * end of the job needs.
+     */
+    begin() {
+      tone({ freq: semi(0), type: 'triangle', gain: 0.09, decay: 0.24 });
+      tone({ freq: semi(7), type: 'triangle', gain: 0.08, decay: 0.3, delay: 0.09 });
+    },
+
+    /** A checklist step falling into place. Lighter than an observation. */
+    tick() {
+      tone({ freq: semi(14), type: 'sine', gain: 0.06, decay: 0.12 });
+      noise({ cut: 3600, q: 3, gain: 0.02, decay: 0.04 });
     },
 
     /** Suspend on tab-hide; the browser will otherwise keep the graph running. */
