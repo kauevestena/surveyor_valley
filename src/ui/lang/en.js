@@ -108,7 +108,7 @@ export default {
   'intro.objective':
     'Set at least two monuments, put the total station over one of them oriented on the other, and survey every corner of the property. At the end you deliver the plan and the metes-and-bounds description.',
   'intro.disclaimer': 'Educational simulation. The documents it produces have no legal standing.',
-  'intro.author': 'Professor Kaue de Moraes Vestena (UTFPR-BR), 2026',
+  'intro.author': 'created by Professor Kaue de Moraes Vestena (UTFPR-BR), 2026',
 
   'difficulty.facil': 'Easy',
   'difficulty.facilDesc': 'Few obstacles, no time limit',
