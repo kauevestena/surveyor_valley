@@ -14,6 +14,13 @@ on:
   pull_request:
   workflow_dispatch:
 
+# checkout and setup-node are pinned at v5, which is the first major of each to
+# run on the node24 action runtime. v4 still works but logs a deprecation
+# warning on every job, and Node 20 is being removed from the runners in the
+# autumn. v5 wants a runner of at least v2.327.1 — no concern on the
+# GitHub-hosted `ubuntu-latest` below, worth knowing if this ever moves to a
+# self-hosted one.
+
 # Nothing here writes to the repository, comments on anything, or publishes.
 permissions:
   contents: read
@@ -36,8 +43,8 @@ jobs:
         # installed Node last week actually is.
         node: ['20', '22', '24']
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
 
@@ -59,8 +66,8 @@ jobs:
     name: every shipped module parses
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
 
