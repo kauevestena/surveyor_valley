@@ -10,6 +10,8 @@ import assert from 'node:assert/strict';
 
 import { makePix, ramp, rgba, rgbToHsl, hash2, PX_PER_M } from '../src/render/pixbuf.js';
 import { buildSprites, buildGroundSprites } from '../src/render/sprites/index.js';
+import { ANIMAL_VARIANTS, PETS, LIVESTOCK } from '../src/render/sprites/animals.js';
+import { makeHerd } from '../src/game/animals.js';
 import { SKIN_TONES, HAIR_TONES, HAT_STYLES, OWNER_LOOKS, resolveLook } from '../src/render/palette.js';
 import { classGrid, paintBase, paintDetail, shadeField } from '../src/render/groundpaint.js';
 import { makeTerrain } from '../src/world/terrain.js';
@@ -302,6 +304,146 @@ test('the owner an actual world puts on a doorstep has a sprite to be drawn with
     for (const dir of ['S', 'N', 'E', 'W']) {
       for (const pose of ['0', 'idle']) {
         assert.ok(keys.has(`${who.look}-${dir}-${pose}`), `${p.id}: no sprite ${who.look}-${dir}-${pose}`);
+      }
+    }
+  }
+});
+
+/**
+ * The farm.
+ *
+ * Livestock wanders, so unlike the owners it needs a walk cycle — and unlike
+ * the owners it also needs the two rest poses a grazing animal alternates
+ * between, which is the whole of what stops a paddock reading as a display
+ * case. Every frame of that has to exist, because `scene.js` asks the atlas for
+ * a key and silently draws nothing when it is missing: an invisible cow is
+ * exactly the bug that survives a play-through.
+ */
+test('every farm animal has every frame it will be asked for', () => {
+  const byKey = new Map(buildSprites().map((s) => [s.key, s]));
+
+  for (const species of Object.keys(LIVESTOCK)) {
+    // The ground line is NOT a shared fraction the way the people's is — a hen
+    // is twelve pixels tall and a cow twenty-two, so `anchorY` differs by
+    // construction. What has to hold is that the anchor lands on the bottom of
+    // the painted art, or the animal floats, and that every frame of one
+    // species agrees, or it bobs as it walks.
+    const stands = (made, key) => {
+      const b = made.pix.bounds();
+      assert.ok(b, `${key} painted nothing`);
+      const foot = Math.round(made.anchorY * made.pix.h);
+      assert.ok(
+        Math.abs(foot - (b.y + b.h - 1)) <= 1,
+        `${key} does not stand on its own feet: anchor at ${foot}, art ends at ${b.y + b.h - 1}`,
+      );
+    };
+    const level = byKey.get(`${species}-0-S-0`).anchorY;
+    const seen = new Map();
+    for (let v = 0; v < ANIMAL_VARIANTS; v++) {
+      for (const dir of ['S', 'N', 'E', 'W']) {
+        for (const pose of ['0', '1', '2', '3', 'idle', 'graze']) {
+          const key = `${species}-${v}-${dir}-${pose}`;
+          const made = byKey.get(key);
+          assert.ok(made, `${key} missing`);
+          stands(made, key);
+          assert.equal(made.anchorY, level, `${key} sits at a different height from the rest of its species`);
+        }
+
+        // The four walk frames cannot all be the same picture, or the animal
+        // slides across the field with its legs welded together.
+        const walk = new Set(['0', '1', '2', '3'].map((f) => byKey.get(`${species}-${v}-${dir}-${f}`).pix.hash()));
+        assert.ok(walk.size > 1, `${species}-${v}-${dir} has no walk cycle at all`);
+
+        const graze = byKey.get(`${species}-${v}-${dir}-graze`).pix.hash();
+        assert.notEqual(graze, byKey.get(`${species}-${v}-${dir}-idle`).pix.hash(), `${species}-${v}-${dir}: grazing and standing paint the same`);
+      }
+
+      // Two coats, and they have to be tellable apart or the second is a
+      // pointless doubling of the atlas.
+      const face = byKey.get(`${species}-${v}-E-0`).pix.hash();
+      assert.ok(!seen.has(face), `${species} coat ${v} is identical to coat ${seen.get(face)}`);
+      seen.set(face, v);
+    }
+  }
+});
+
+test('a cat and a dog sit differently, and neither is livestock', () => {
+  const byKey = new Map(buildSprites().map((s) => [s.key, s]));
+  const stock = new Set(
+    Object.keys(LIVESTOCK).flatMap((sp) =>
+      [0, 1].map((v) => byKey.get(`${sp}-${v}-S-0`).pix.hash()),
+    ),
+  );
+
+  for (const species of PETS) {
+    for (let v = 0; v < ANIMAL_VARIANTS; v++) {
+      for (const dir of ['S', 'N', 'E', 'W']) {
+        for (const pose of ['0', 'idle']) {
+          const key = `${species}-${v}-${dir}-${pose}`;
+          const made = byKey.get(key);
+          assert.ok(made, `${key} missing`);
+          const b = made.pix.bounds();
+          assert.ok(b, `${key} painted nothing`);
+          // Sitting on the ground rather than hovering over it. A pet's own
+          // height differs from a person's, so this is the anchor against its
+          // own art, not against the crew's fraction.
+          assert.ok(
+            Math.abs(Math.round(made.anchorY * made.pix.h) - (b.y + b.h - 1)) <= 1,
+            `${key} is not sitting on the ground`,
+          );
+        }
+        // The breath has to actually move something, or the pet is a photograph
+        // sitting beside a person who is not.
+        assert.notEqual(
+          byKey.get(`${species}-${v}-${dir}-0`).pix.hash(),
+          byKey.get(`${species}-${v}-${dir}-idle`).pix.hash(),
+          `${species}-${v}-${dir} does not breathe`,
+        );
+      }
+      assert.ok(!stock.has(byKey.get(`${species}-${v}-S-0`).pix.hash()), `${species} coat ${v} is painted as livestock`);
+    }
+  }
+
+  // A pointed ear over a short face against a folded ear over a long one is
+  // the entire difference between the two, and it has to survive.
+  for (const dir of ['S', 'N', 'E']) {
+    assert.notEqual(
+      byKey.get(`cat-0-${dir}-0`).pix.hash(),
+      byKey.get(`dog-0-${dir}-0`).pix.hash(),
+      `the cat and the dog paint identically facing ${dir}`,
+    );
+  }
+});
+
+/**
+ * The other half of the join `animals.test.mjs` holds.
+ *
+ * A world deals coats and pets from its seed; the atlas is painted at boot from
+ * fixed archetypes and cannot know what it dealt. Nothing checks the two agree
+ * at runtime — a missing key draws nothing, silently.
+ */
+test('every animal an actual valley puts on a farm has a sprite to be drawn with', () => {
+  const keys = new Set(buildSprites().map((s) => s.key));
+  const w = buildWorld('sv-fazenda', DIFFICULTY.medio);
+
+  for (const a of makeHerd(w)) {
+    for (const dir of ['S', 'N', 'E', 'W']) {
+      for (const pose of ['0', '1', '2', '3', 'idle', 'graze']) {
+        assert.ok(keys.has(`${a.species}-${a.variant}-${dir}-${pose}`), `${a.id}: no sprite for ${dir}-${pose}`);
+      }
+    }
+  }
+
+  for (const p of w.parcels) {
+    const who = w.residentFor(p.id);
+    if (!who) continue;
+    assert.ok(who.pet, `${p.id}: the owner has nobody with them`);
+    for (const dir of ['S', 'N', 'E', 'W']) {
+      for (const pose of ['0', 'idle']) {
+        assert.ok(
+          keys.has(`${who.pet}-${who.petVariant}-${dir}-${pose}`),
+          `${p.id}: no sprite ${who.pet}-${who.petVariant}-${dir}-${pose}`,
+        );
       }
     }
   }

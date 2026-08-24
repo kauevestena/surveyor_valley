@@ -89,6 +89,32 @@ export const P = {
   khaki: ramp('#8f8455', 3),
   camisa: ramp('#7fa8a0', 3),
 
+  // The farm. Livestock and the pets, kept out of every human palette above for
+  // the same reason the owners are kept out of the crew's: the vest is the
+  // player, the plaid and the pole are Ligeirinho, the linen and chita are the
+  // neighbours, and an animal must not be mistaken at a glance for any of them.
+  //
+  // Hide and feather take a reduced hue rotation, as skin does. The house
+  // default swings a warm cream toward crimson on the shadow step, which on a
+  // flank reads as a wound rather than as shading.
+  feather: ramp('#ece3cf', 3, { hueShift: 0.06, spread: 0.13 }),
+  featherRed: ramp('#b0703a', 3, { hueShift: 0.09, spread: 0.13 }),
+  comb: ramp('#c4402f', 3),
+  beak: ramp('#e0a42c', 3),
+
+  hide: ramp('#e6ded0', 3, { hueShift: 0.06, spread: 0.13 }),
+  hideDark: ramp('#4a3b34', 3, { hueShift: 0.1, spread: 0.11 }),
+  hideBrown: ramp('#a0673a', 3, { hueShift: 0.1, spread: 0.12 }),
+  horn: ramp('#cbbb92', 3),
+
+  pork: ramp('#e0a0a0', 3, { hueShift: 0.03, spread: 0.11 }),
+  porkDark: ramp('#9a6a62', 3, { hueShift: 0.06, spread: 0.11 }),
+
+  furTabby: ramp('#b08a52', 3, { hueShift: 0.1, spread: 0.13 }),
+  furSoot: ramp('#3f3a38', 3, { hueShift: 0.1, spread: 0.12 }),
+  furTan: ramp('#c08c4e', 3, { hueShift: 0.1, spread: 0.13 }),
+  furDark: ramp('#5e4632', 3, { hueShift: 0.1, spread: 0.12 }),
+
   instrument: ramp('#3a4650', 3),
   instrumentTrim: ramp('#f2c14e', 3),
   lens: ramp('#7fd0f0', 3),

@@ -120,6 +120,21 @@ tests/
   metres.** The producer counts rows northward; a painter that counts them the other way
   mirrors the chunk, which is exactly what happened. The grid's orientation now has a
   test.
+- **The farm animals are outside `world.entities`, and that is load-bearing.** The
+  livestock in every farmyard, and the cat or dog at each owner's side, block nothing:
+  not walking, not a sight line, and none of them can be pointed at with the instrument.
+  Two mechanical facts force the arrangement — `world.spatial` is insert-only, so it
+  cannot hold anything that travels, and `world.hash()` mixes every entity's position, so
+  a herd inside it would change the identity of the valley sixty times a second. The
+  didactic reason is the one that actually matters: a cow between the tripod and a corner
+  would refuse a sight for a reason no student could learn anything from, and the same
+  seed would then close to a different error depending on where she happened to stand.
+  So the herd lives in `game/animals.js` and is held by `main.js` beside the player and
+  Ligeirinho, who are outside the entity list for the same reason. **Placement is seeded,
+  motion is not**: which farm gets the brown cow comes out of the seed, where she has
+  wandered to by half past nine does not. `tests/animals.test.mjs` asserts the world hash
+  is untouched by a minute of wandering, because that is the promise everything else
+  rests on.
 - **There is one collision solver, and both people use it.** `player.js#slideStep` takes a
   radius; Ligeirinho passes a smaller one and sub-steps it, because at 45 m/s a fixed step
   is 0.75 m and `canStand` tests a position rather than a swept path. A second
