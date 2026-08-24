@@ -51,7 +51,8 @@ memorial descritivo, without a browser.
 - `tests/persistence.test.mjs` — saving and resuming a campaign, and refusing a
   corrupt or future-version save rather than trusting it.
 - `tests/offline.test.mjs` — the service worker's precache list matches the files on disk,
-  and the PixiJS pin, its SRI hash and the cached URL all agree.
+  the PixiJS pin, its SRI hash and the cached URL all agree, and a vendored copy of Pixi
+  resolves next to the page rather than next to the module that imports it.
 - `tests/render.test.mjs` — the art pipeline. Sprite painters are deterministic and
   outlined, the shading ramp shifts hue in the right direction for every base colour,
   ground chunks bake identically in slices as in one pass, and the camera never leaves

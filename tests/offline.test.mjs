@@ -18,6 +18,8 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { localPixiUrl } from '../src/render/pixi.js';
+
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const sw = readFileSync(join(ROOT, 'sw.js'), 'utf8');
 
@@ -87,4 +89,67 @@ test('the Pixi pin, its integrity hash and the cached URL all agree', () => {
 
   // A floating range cannot be pinned by a hash.
   assert.match(htmlUrl, /@\d+\.\d+\.\d+\//, 'pin an exact version, never a range');
+});
+
+/**
+ * The last line of defence, and the one that had quietly fallen over.
+ *
+ * A vendored bundle beside index.html is the only route to Pixi that cannot be
+ * blocked — it is what a genuinely air-gapped lab has instead of a CDN and
+ * instead of a first successful visit to prime the cache. It was reached by one
+ * relative string used for two different things, and the two resolve against
+ * different bases:
+ *
+ *   `fetch('./vendor/x')`  against the PAGE    -> /vendor/x
+ *   `import('./vendor/x')` against the MODULE  -> /src/render/vendor/x
+ *
+ * So the probe passed, the import 404'd, and the 404 landed in the same catch
+ * as "there is no local copy" — the fallback was skipped on every load, exactly
+ * where there was no network left to fall back to. Nothing said so.
+ */
+test('a vendored Pixi resolves next to the page, never next to the module', () => {
+  const cases = [
+    ['https://kauevestena.github.io/surveyor_valley/', 'https://kauevestena.github.io/surveyor_valley/vendor/pixi.min.mjs'],
+    ['https://kauevestena.github.io/surveyor_valley/index.html', 'https://kauevestena.github.io/surveyor_valley/vendor/pixi.min.mjs'],
+    ['http://localhost:8000/index.html?seed=sv-1a2b3c&start=1', 'http://localhost:8000/vendor/pixi.min.mjs'],
+    ['file:///home/aluno/surveyor_valley/index.html', 'file:///home/aluno/surveyor_valley/vendor/pixi.min.mjs'],
+  ];
+
+  for (const [base, want] of cases) {
+    assert.equal(localPixiUrl(base), want, `resolved wrongly from ${base}`);
+    // The specific shape of the old bug: anything under the importing module's
+    // own directory is a path that has never existed on disk.
+    assert.ok(!localPixiUrl(base).includes('/src/'), `${base}: resolved under src/, where no vendored copy lives`);
+  }
+});
+
+test('the loader never hands a bare relative path to import()', () => {
+  // The rule behind the test above, stated where it can be broken again. A
+  // relative specifier means one thing to `fetch` and another to `import`, so
+  // inside this module — which does both to the same file — every dynamic
+  // import must be given an already-resolved URL.
+  //
+  // Comments are stripped first, and not as a nicety: the loader's header
+  // explains this very bug by quoting `import('./vendor/x')`, so a scan of the
+  // raw source flags the documentation that exists to prevent it.
+  const loader = readFileSync(join(ROOT, 'src/render/pixi.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/^\s*\/\/.*$/gm, ' ');
+
+  const specifiers = [...loader.matchAll(/\bimport\(\s*([^)]+?)\s*\)/g)].map((m) => m[1]);
+  assert.ok(specifiers.length > 0, 'the loader no longer imports Pixi at all');
+
+  for (const spec of specifiers) {
+    assert.ok(
+      !/^['"`]\./.test(spec),
+      `import(${spec}) is relative — it resolves against this module, not the page, so it cannot reach a vendored copy`,
+    );
+  }
+
+  // And the header has to keep telling somebody where to put the file.
+  assert.match(
+    readFileSync(join(ROOT, 'src/render/pixi.js'), 'utf8'),
+    /vendor\/pixi\.min\.mjs/,
+    'the vendored path must be documented in the loader',
+  );
 });
