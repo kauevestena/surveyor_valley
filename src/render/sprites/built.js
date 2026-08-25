@@ -26,6 +26,60 @@ const VARIANTS = [
 ];
 export const BUILDING_VARIANTS = VARIANTS.length;
 
+/** The visible front wall, in metres. The roof sits on top of this. */
+const WALL_M = 1.35;
+/** The eave lip, in pixels: the roof overhangs the footprint on all four sides. */
+const EAVE = 4;
+/** How far the chimney pokes above the roof, in pixels. */
+const CHIMNEY = 3;
+/** The wall in whole pixels, which is what actually gets painted. */
+const WALL_PX = Math.round(WALL_M * PX_PER_M);
+/** `pix.outline` lays one more pixel all round at the end. */
+const OUTLINE = 1;
+
+/**
+ * How far the painted building spills past its footprint ring, in metres.
+ *
+ * The sprite is anchored on the footprint CENTRE, not on its base, so it
+ * covers ground the collision ring says is outside the building: the eave
+ * either side, the chimney above the ridge, and — much the largest of the
+ * three — the whole front wall below, because a wall seen from the south is
+ * drawn under the roof it holds up. Anything deciding what may be drawn where
+ * a building stands has to measure with these, not with the ring, or it will
+ * put grass on the roof.
+ */
+export const BUILDING_OVERHANG = {
+  side: EAVE / PX_PER_M,
+  north: (CHIMNEY + OUTLINE) / PX_PER_M,
+  south: WALL_PX / PX_PER_M,
+};
+
+/**
+ * The northing a building has to be y-sorted at: the southern edge of what it
+ * PAINTS, not the centre of its footprint.
+ *
+ * The scene sorts on `zIndex = -n`, so a body further south is drawn later and
+ * overlaps one further north. Sorting a house at its centre broke that for the
+ * strip of ground its front wall is painted over: a hen standing a step south
+ * of the south wall is north of where the wall is DRAWN, so she sorted later
+ * than the house and appeared to be perched on it. She was not somewhere she
+ * should not have been — that ground is hers, and `canStand` is right to let
+ * her have it — she was simply drawn in the wrong order.
+ *
+ * Sorting at the sprite's own base is the fix, and it is the right one for
+ * everything else in that strip too: in a three-quarter view the ground under
+ * a painted wall is ground BEHIND that wall, so anything standing on it belongs
+ * behind the house. Player, assistant, residents and trees all get this for
+ * free, because they were never the ones that were wrong.
+ *
+ * @param {Array<[number, number]>} ring  the footprint
+ */
+export function buildingSortNorthing(ring) {
+  let minN = Infinity;
+  for (const [, n] of ring) if (n < minN) minN = n;
+  return minN - BUILDING_OVERHANG.south;
+}
+
 /**
  * A farmhouse, shed or barn.
  * @param {object} rng
@@ -36,8 +90,8 @@ export const BUILDING_VARIANTS = VARIANTS.length;
 export function building(rng, { wm, hm, variant = 0 }) {
   const fw = Math.max(24, Math.round(wm * PX_PER_M));
   const fh = Math.max(20, Math.round(hm * PX_PER_M));
-  const wallPx = Math.round(1.35 * PX_PER_M); // the front wall we can see
-  const eave = 4;
+  const wallPx = WALL_PX; // the front wall we can see
+  const eave = EAVE;
 
   const W = fw + eave * 2;
   const H = fh + wallPx + eave;
@@ -131,8 +185,8 @@ export function building(rng, { wm, hm, variant = 0 }) {
   // Chimney, on the houses.
   if (v.chimney) {
     const chx = left + Math.round(fw * 0.72);
-    pix.fill(chx, roofTop - 3, 6, 9, P.rock[1]);
-    pix.hline(chx, chx + 5, roofTop - 3, P.rock[2]);
+    pix.fill(chx, roofTop - CHIMNEY, 6, 9, P.rock[1]);
+    pix.hline(chx, chx + 5, roofTop - CHIMNEY, P.rock[2]);
     pix.hline(chx, chx + 5, roofTop - 1, P.rock[0]);
   }
 

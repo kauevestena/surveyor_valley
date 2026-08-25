@@ -9,6 +9,8 @@
 // building corners and boundary markers are all legitimate survey targets,
 // which is what makes a cadastral survey of a real property feel real.
 
+import { pointInPolygon } from '../core/math2d.js';
+
 export const KIND = {
   ARVORE: 'arvore',
   ARBUSTO: 'arbusto',
@@ -133,6 +135,23 @@ export function makeBuilding(ring, o = {}) {
   const cy = ring.reduce((s, p) => s + p[1], 0) / ring.length;
   const r = Math.max(...ring.map((p) => Math.hypot(p[0] - cx, p[1] - cy)));
   return makeEntity(KIND.BENFEITORIA, cx, cy, { seg: ring, r, losR: r, targetKind: 'benfeitoria', ...o });
+}
+
+/**
+ * Is this point inside a building, rather than merely near one?
+ *
+ * A footprint is stored as a closed ring and every collision test in the game
+ * used to measure the distance to its WALLS — which correctly stops a body
+ * crossing one, and says nothing at all about a body that is already indoors.
+ * The interior was a walkable hole: anything placed in it stood there happily
+ * and could never get out again. That is how the herd ended up in the parlour.
+ *
+ * Non-buildings answer `false`. A fence is an open polyline and has no inside.
+ */
+export function insideFootprint(ent, e, n) {
+  if (ent.kind !== KIND.BENFEITORIA) return false;
+  if (!ent.seg || ent.seg.length < 3) return false;
+  return pointInPolygon(e, n, ent.seg);
 }
 
 /**

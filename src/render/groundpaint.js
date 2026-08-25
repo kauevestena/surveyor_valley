@@ -47,6 +47,30 @@ const DETAIL = {
 /** Things that grow in patches rather than evenly. */
 const CLUMPY = new Set(['flower', 'tussock', 'stone', 'reed']);
 
+/** Which of the DETAIL items are growing things rather than litter. */
+const GRASSES = new Set(['tuft', 'tuftDry', 'tuftTall', 'tussock', 'reed']);
+
+/**
+ * How grassy each soil class is, as a fraction of pasture.
+ *
+ * The baked pass above is the only honest account of what grows where, so the
+ * animated sway layer in `effects.js` reads its density rather than keeping a
+ * second opinion — the two are the same grass, one painted into the chunk and
+ * one standing on top of it moving, and they have to agree about whether there
+ * is any. Derived from `DETAIL` so that changing a density there changes both.
+ *
+ * Capped at pasture: `CAMPO_SUJO` is denser still by count, but it is dry
+ * scrub, and letting it exceed 1 would give the poorer ground the livelier
+ * grass.
+ */
+export const GRASS_COVER = Object.fromEntries(
+  Object.entries(DETAIL).map(([cls, items]) => {
+    let sum = 0;
+    for (const [item, density] of Object.entries(items)) if (GRASSES.has(item)) sum += density;
+    return [cls, Math.min(1, sum / DETAIL.PASTO.tuft)];
+  }),
+);
+
 /** Soil ids, in the order `world/terrain.js` declares them. */
 export const CLASS_IDS = Object.keys(GROUND);
 const CLASS_INDEX = new Map(CLASS_IDS.map((id, i) => [id, i]));

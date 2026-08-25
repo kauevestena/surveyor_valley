@@ -11,10 +11,12 @@ import assert from 'node:assert/strict';
 import { makePix, ramp, rgba, rgbToHsl, hash2, PX_PER_M } from '../src/render/pixbuf.js';
 import { buildSprites, buildGroundSprites } from '../src/render/sprites/index.js';
 import { ANIMAL_VARIANTS, PETS, LIVESTOCK } from '../src/render/sprites/animals.js';
-import { makeHerd } from '../src/game/animals.js';
+import { building, BUILDING_VARIANTS, BUILDING_OVERHANG, buildingSortNorthing } from '../src/render/sprites/built.js';
+import { makeRng } from '../src/core/rng.js';
+import { makeHerd, SPECIES, STOCK } from '../src/game/animals.js';
 import { SKIN_TONES, HAIR_TONES, HAT_STYLES, OWNER_LOOKS, resolveLook } from '../src/render/palette.js';
-import { classGrid, paintBase, paintDetail, shadeField } from '../src/render/groundpaint.js';
-import { makeTerrain } from '../src/world/terrain.js';
+import { classGrid, paintBase, paintDetail, shadeField, GRASS_COVER } from '../src/render/groundpaint.js';
+import { makeTerrain, SOIL_IDS } from '../src/world/terrain.js';
 import { buildWorld } from '../src/world/world.js';
 import { DIFFICULTY } from '../src/core/state.js';
 import { makeCamera, ZOOM_LADDER, ZOOM_DEFAULT } from '../src/render/camera.js';
@@ -213,6 +215,102 @@ test('the canopy is painted, not filled', () => {
   assert.ok(seen.size > 12, `expected a painted canopy, got ${seen.size} distinct colours`);
 });
 
+/**
+ * `BUILDING_OVERHANG` is how the effects layer knows where not to plant grass.
+ *
+ * A building sprite is anchored on its footprint CENTRE, so it paints well
+ * outside the ring collision uses — most of a metre and a half of front wall
+ * below it. A swaying tuft south of the house sorts ON TOP of the house
+ * (`zIndex = -n`), so anything that trusts the ring instead of these numbers
+ * puts grass growing out of the roof tiles. If the painter's eave, wall or
+ * chimney ever changes, this is what catches it.
+ */
+test('the declared building overhang really covers everything a building paints', () => {
+  for (let variant = 0; variant < BUILDING_VARIANTS; variant++) {
+    for (const [wm, hm] of [
+      [7, 6],
+      [9, 8],
+      [12, 10],
+    ]) {
+      const { pix, anchorX, anchorY } = building(makeRng('overhang'), { wm, hm, variant });
+      const ax = anchorX * pix.w;
+      const ay = anchorY * pix.h;
+
+      let minX = pix.w;
+      let maxX = -1;
+      let minY = pix.h;
+      let maxY = -1;
+      for (let y = 0; y < pix.h; y++) {
+        for (let x = 0; x < pix.w; x++) {
+          if (pix.get(x, y)[3] === 0) continue;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+
+      const painted = {
+        side: Math.max(ax - minX, maxX + 1 - ax) / PX_PER_M - wm / 2,
+        north: (ay - minY) / PX_PER_M - hm / 2,
+        south: (maxY + 1 - ay) / PX_PER_M - hm / 2,
+      };
+      for (const edge of ['side', 'north', 'south']) {
+        assert.ok(
+          painted[edge] <= BUILDING_OVERHANG[edge] + 1e-9,
+          `v${variant} ${wm}x${hm} paints ${painted[edge].toFixed(3)} m past its ${edge} edge, ` +
+            `but BUILDING_OVERHANG.${edge} promises only ${BUILDING_OVERHANG[edge]}`,
+        );
+      }
+
+      // ...and the scene has to SORT it at the bottom of all that. Anything
+      // standing in the strip the front wall is painted over is north of where
+      // that wall is drawn, so a house sorted at its own centre is drawn first
+      // and the hen in its yard appears to be perched on the roof.
+      const ring = [
+        [-wm / 2, -hm / 2],
+        [wm / 2, -hm / 2],
+        [wm / 2, hm / 2],
+        [-wm / 2, hm / 2],
+      ];
+      const sortN = buildingSortNorthing(ring);
+      assert.ok(
+        sortN <= -(hm / 2 + painted.south) + 1e-9,
+        `v${variant} ${wm}x${hm} sorts at ${sortN.toFixed(3)} but paints down to ` +
+          `${(-(hm / 2 + painted.south)).toFixed(3)}`,
+      );
+      assert.ok(sortN < -hm / 2, 'a house must not sort at its own footprint edge or centre');
+    }
+  }
+});
+
+/**
+ * The animated sway tufts in `effects.js` are the one grass that is not baked,
+ * and they used to be scattered on whatever cell a hash liked — pasture grass
+ * waving on open water and on bare rock. They read `GRASS_COVER` now instead
+ * of keeping a second opinion about what grows where, so it has to keep
+ * answering for every soil the world can generate.
+ */
+test('the grass cover the sway layer reads accounts for every soil in the valley', () => {
+  for (const id of SOIL_IDS) {
+    assert.ok(
+      Object.hasOwn(GRASS_COVER, id),
+      `${id} has no entry in GRASS_COVER, so sway grass would default to full pasture on it`,
+    );
+    const cover = GRASS_COVER[id];
+    assert.ok(cover >= 0 && cover <= 1, `${id} has a cover of ${cover}, outside 0..1`);
+  }
+
+  // Pasture is the reference, and the three the baked pass grows nothing on
+  // must grow nothing here either — a swaying tuft on a lake is the bug.
+  assert.equal(GRASS_COVER.PASTO, 1, 'pasture is meant to be the fully grassy case');
+  for (const id of ['AGUA', 'AREIA', 'LAVOURA']) {
+    assert.equal(GRASS_COVER[id], 0, `the baked pass puts no grass on ${id}, so the sway layer must not either`);
+  }
+  assert.ok(GRASS_COVER.BREJO > 0.5, 'marsh is reedy, not bare');
+  assert.ok(GRASS_COVER.ROCHA < 0.1, 'rock is bare, not a lawn');
+});
+
 test('sprite keys the scene asks for all exist', () => {
   const keys = new Set(buildSprites().map((s) => s.key));
   for (let v = 0; v < 8; v++) for (let s = 0; s < 3; s++) assert.ok(keys.has(`tree-${v}-${s}`));
@@ -364,6 +462,28 @@ test('every farm animal has every frame it will be asked for', () => {
       assert.ok(!seen.has(face), `${species} coat ${v} is identical to coat ${seen.get(face)}`);
       seen.set(face, v);
     }
+  }
+});
+
+/**
+ * `STOCK` is hens only. The cattle and pig painters are kept anyway — the note
+ * on `STOCK` explains why, and promises that putting a row back in that table
+ * is the whole of what restocking takes. Art nothing draws is art nothing
+ * notices going stale, so this is what keeps that promise true: every species
+ * the game can name still paints, whether or not a valley contains one.
+ */
+test('every species the game can name still has art, stocked or not', () => {
+  for (const species of Object.values(SPECIES)) {
+    assert.ok(
+      Object.hasOwn(LIVESTOCK, species),
+      `${species} is a species the game names but the atlas cannot paint`,
+    );
+  }
+  for (const species of Object.keys(STOCK)) {
+    assert.ok(
+      Object.values(SPECIES).includes(species),
+      `${species} is planted on farms but is not one of the species the game names`,
+    );
   }
 });
 

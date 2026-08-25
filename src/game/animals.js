@@ -1,15 +1,16 @@
 // The farm animals, and where they are allowed to be.
 //
-// Hens, pigs and cows, a few of each around every homestead. Their whole job is
-// to make a farmyard look like somewhere people work rather than a diagram with
-// a house on it — the same argument that put the moradores on their doorsteps.
+// A few hens around every homestead. Their whole job is to make a farmyard look
+// like somewhere people work rather than a diagram with a house on it — the
+// same argument that put the moradores on their doorsteps. Cattle and pigs used
+// to be stocked here as well; `STOCK` below says what became of them.
 //
 // THEY ARE SCENERY, AND THAT IS A DESIGN DECISION RATHER THAN AN OMISSION.
 // Nothing here blocks walking, blocks a sight line, or can be pointed at with
 // the instrument. `entities.js` already states the rule for a person standing
-// in their own gate, and it binds harder on something that moves: a cow between
-// the tripod and a corner would refuse a sight for a reason no student could
-// learn anything from, and — worse — the same seed would then close to a
+// in their own gate, and it binds harder on something that moves: a bird
+// between the tripod and a corner would refuse a sight for a reason no student
+// could learn anything from, and — worse — the same seed would then close to a
 // different error depending on where she happened to be standing. The valley's
 // determinism is the thing the whole game is built on.
 //
@@ -22,7 +23,7 @@
 //   * `world.hash()` mixes every entity's position, and a herd inside it would
 //     change the world's identity sixty times a second.
 //
-// PLACEMENT IS SEEDED; MOTION IS NOT. Which farm gets the brown cow comes out
+// PLACEMENT IS SEEDED; MOTION IS NOT. Which farm gets the brown hen comes out
 // of the seed, so a valley is the same valley every time it is built. Where she
 // has wandered to by half past nine does not, and must not look as though it
 // does — this is presentation, exactly like the butterflies in `effects.js`.
@@ -32,6 +33,13 @@
 import { makeRng } from '../core/rng.js';
 import { slideStep, canStand } from './player.js';
 
+/**
+ * Every animal the art can paint — which is NOT the same list as `STOCK`.
+ *
+ * The atlas, `LIVESTOCK` in `render/sprites/animals.js` and the calls in
+ * `audio/audio.js` are all still complete for cattle and pigs; see the note on
+ * `STOCK` for why nothing plants one.
+ */
 export const SPECIES = {
   CHICKEN: 'chicken',
   COW: 'cow',
@@ -39,21 +47,28 @@ export const SPECIES = {
 };
 
 /**
- * What lives on a farm, and how much room it needs.
+ * What actually gets planted on a farm, and how much room it needs.
+ *
+ * HENS ONLY. Cattle and pigs were stocked here too and are not any more: the
+ * valley reads as a smallholding rather than as a ranch, and the big bodies
+ * were the ones that made it read otherwise — a cow is 18 m of roam and nearly
+ * two metres of sprite, so a couple of them dominated a farmyard the house was
+ * supposed to be the middle of. Their art, their audio and their atlas entries
+ * are all still here and all still correct, exactly as `makeFence` is in
+ * `world/entities.js`: putting a row back in this table is the whole of what it
+ * would take to stock them again. Do not read the painters' presence as
+ * evidence that there are cows in the valley.
  *
  * Real animal paces, not the crew's. The player runs at 7 m/s and Ligeirinho
  * dashes at 45 because the alternative is watching somebody amble across a
- * field forty times a job — nothing is ever waiting on a cow, so she gets to
- * move like a cow.
+ * field forty times a job — nothing is ever waiting on a hen, so she gets to
+ * move like a hen.
  *
- * `roam` is measured from the doorstep. Hens stay in the yard, pigs keep near
- * it, and the cattle are out on the pasture, which is both true and what makes
- * a farmyard read as having a middle and an edge.
+ * `roam` is measured from the doorstep, and 6 m keeps the flock in the yard,
+ * which is where hens belong and what makes a farmyard read as having a middle.
  */
 export const STOCK = {
   [SPECIES.CHICKEN]: { min: 3, max: 5, roam: 6, speed: 1.2, radius: 0.15, stride: 0.32, graze: [1.5, 4] },
-  [SPECIES.PIG]: { min: 1, max: 2, roam: 9, speed: 0.8, radius: 0.4, stride: 0.5, graze: [3, 7] },
-  [SPECIES.COW]: { min: 2, max: 3, roam: 18, speed: 0.5, radius: 0.7, stride: 0.9, graze: [4, 9] },
 };
 
 /** Coats per species, matching what the atlas was painted with. */
@@ -62,19 +77,22 @@ export const COATS = 2;
 /**
  * How far an animal must stay from a boundary mark.
  *
- * A cow is thirty pixels wide and a marco is four. Parked on one she hides it
- * completely, and the player would be hunting the scrub for a corner that is
- * standing right there behind a animal — a puzzle the game never set and cannot
- * explain. The farmhouse is sited well inside the parcel, so this almost never
- * binds; "almost never" is not a guarantee, and this is the guarantee.
+ * A hen is twelve pixels wide and a marco is four, and a marco found is the
+ * whole of the job: the player must never be hunting the scrub for a corner
+ * that is standing right there behind an animal, a puzzle the game never set
+ * and cannot explain. The clearance is generous for a bird — it was sized for
+ * the cattle that used to stand here — and is left as it is on purpose, so that
+ * restocking `STOCK` cannot quietly reintroduce the problem. The farmhouse is
+ * sited well inside the parcel, so it almost never binds anyway; "almost never"
+ * is not a guarantee, and this is the guarantee.
  */
 export const MARK_CLEARANCE = 3;
 
 /**
  * Only animals this close to the player are stepped.
  *
- * Six farms of livestock is around forty bodies, and stepping every one of them
- * through a collision solver sixty times a second to animate a paddock nobody
+ * Six farms of livestock is a couple of dozen bodies, and stepping every one of
+ * them through a collision solver sixty times a second to animate a yard nobody
  * is looking at is work for nothing. They are presentation: an animal nobody
  * can see may hold perfectly still, and does.
  */
@@ -113,8 +131,8 @@ const CALL_GAP = [6, 14];
  * or move a tree, because `makeRng` derives each stream independently.
  *
  * Animals whose farm has no homestead are simply not born: `sedeFor` returns
- * null when the generator could find nowhere to put a house, and a cow with no
- * farm to belong to is a cow in the middle of a field.
+ * null when the generator could find nowhere to put a house, and a hen with no
+ * farm to belong to is a hen in the middle of a field.
  *
  * @param {object} world
  * @returns {Array<object>} the herd, in no particular order
@@ -175,7 +193,7 @@ function spawn(id, species, variant, parcelId, home, s, spot) {
  *
  * Rejects three things, in the order they are cheapest to test: outside the
  * roam disc, too near a boundary mark, and ground the game itself refuses —
- * `canStand` is the same predicate the player is judged by, so a pig cannot
+ * `canStand` is the same predicate the player is judged by, so a hen cannot
  * end up somewhere the player could walk through her.
  *
  * @param {{next:Function}|null} rng  seeded at placement, absent while wandering

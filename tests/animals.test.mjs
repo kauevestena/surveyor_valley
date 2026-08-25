@@ -5,7 +5,7 @@
 //
 // The first is that the animals are SCENERY. They are outside `world.entities`
 // on purpose — `world.spatial` is insert-only and `world.hash()` mixes every
-// entity position — and the moment one leaks in, a cow standing between the
+// entity position — and the moment one leaks in, a bird standing between the
 // tripod and a corner starts refusing sights, and the same seed stops closing
 // to the same error. That is the property the whole game rests on, so it is
 // asserted directly rather than reasoned about.
@@ -28,11 +28,12 @@ import {
   MARK_CLEARANCE,
   ACTIVE_RADIUS,
   MODE,
-  SPECIES,
 } from '../src/game/animals.js';
 import { buildWorld } from '../src/world/world.js';
 import { DIFFICULTY } from '../src/core/state.js';
 import { canStand } from '../src/game/player.js';
+import { pointInPolygon } from '../src/core/math2d.js';
+import { buildingSortNorthing, BUILDING_OVERHANG } from '../src/render/sprites/built.js';
 
 const DT = 1 / 60;
 const SEED = 'sv-fazenda';
@@ -82,7 +83,7 @@ test('the same seed stocks the same farms, and a different one does not', () => 
 
 test('every coat an animal is dealt is one the atlas was painted with', () => {
   // The atlas is painted at boot from fixed archetypes and cannot know which
-  // farm got the brown cow. A variant off the end of that table draws nothing
+  // farm got the brown hen. A variant off the end of that table draws nothing
   // at all, silently — `render.test.mjs` holds the other half of this join.
   const world = buildWorld(SEED, DIFFICULTY.dificil);
   for (const a of makeHerd(world)) {
@@ -102,14 +103,105 @@ test('animals start on ground the game agrees can be stood on, clear of the mark
       `${a.id} starts outside its own paddock`,
     );
 
-    // A cow is thirty pixels wide and a marco is four: parked on one she hides
-    // it completely, and the player hunts the scrub for a corner that is
-    // standing right there behind an animal.
+    // A marco is four pixels wide: parked on one, an animal hides it, and the
+    // player hunts the scrub for a corner that is standing right there behind
+    // a hen.
     for (const ent of world.spatial.queryCircle(a.e, a.n, MARK_CLEARANCE)) {
       if (ent.targetKind !== 'divisa' && ent.targetKind !== 'marco') continue;
       assert.fail(`${a.id} is standing on ${ent.id}, a survey target it is big enough to hide`);
     }
   }
+});
+
+/**
+ * The herd is anchored on the doorstep, so a good part of every roam disc is
+ * the house itself — and a footprint is stored as a closed ring that every
+ * collision test measured only the WALLS of. The interior was a walkable hole:
+ * `canStand` said yes, `findSpot` put chickens in the parlour, and the slide
+ * solver then made sure they never came out again. Measured on six seeds
+ * before the interior test existed, three to six animals per valley started
+ * indoors and were still indoors after a minute of wandering.
+ */
+test('no animal is ever inside a farmhouse, at placement or after wandering', () => {
+  for (const seed of [SEED, 'a', 'b', 'c']) {
+    const world = buildWorld(seed, DIFFICULTY.medio);
+    const houses = world.entities.filter((e) => e.kind === 'benfeitoria');
+    assert.ok(houses.length > 0, `seed ${seed} generated no buildings to test against`);
+    const herd = makeHerd(world);
+
+    const indoors = (a) => houses.find((h) => pointInPolygon(a.e, a.n, h.seg));
+    for (const a of herd) {
+      const h = indoors(a);
+      assert.ok(!h, `${a.id} was placed inside ${h?.id} on seed ${seed}`);
+    }
+
+    // Stand the player on each doorstep in turn: an animal only wanders while
+    // it is inside `ACTIVE_RADIUS` of somebody watching.
+    for (const h of houses) {
+      run(herd, world, 30, { e: h.e, n: h.n });
+    }
+    for (const a of herd) {
+      const h = indoors(a);
+      assert.ok(!h, `${a.id} wandered into ${h?.id} on seed ${seed}`);
+    }
+  }
+});
+
+/**
+ * The other half of the same promise.
+ *
+ * Keeping the flock out of the building is not enough on its own, because a
+ * farmhouse is drawn well below the ground it stands on — a three-quarter view
+ * paints the front wall under the footprint. A hen a step south of that wall is
+ * standing somewhere perfectly legal, and `canStand` is right to let her, but
+ * she is north of where the wall is DRAWN. Sorted against the footprint centre
+ * she came out on top of the house; sorted against the bottom of the sprite,
+ * which is what `buildingSortNorthing` returns, she is correctly behind it.
+ */
+test('no animal is ever drawn on top of a farmhouse', () => {
+  const world = buildWorld(SEED, DIFFICULTY.medio);
+  const houses = world.entities.filter((e) => e.kind === 'benfeitoria');
+  const herd = makeHerd(world);
+
+  const sprites = houses.map((h) => {
+    const es = h.seg.map((p) => p[0]);
+    const ns = h.seg.map((p) => p[1]);
+    return {
+      id: h.id,
+      sortN: buildingSortNorthing(h.seg),
+      minE: Math.min(...es) - BUILDING_OVERHANG.side,
+      maxE: Math.max(...es) + BUILDING_OVERHANG.side,
+      minN: Math.min(...ns) - BUILDING_OVERHANG.south,
+      maxN: Math.max(...ns) + BUILDING_OVERHANG.north,
+    };
+  });
+
+  let underOne = 0;
+  const check = (when) => {
+    for (const a of herd) {
+      for (const s of sprites) {
+        if (a.e < s.minE || a.e > s.maxE || a.n < s.minN || a.n > s.maxN) continue;
+        underOne++;
+        // The scene draws in ascending zIndex, and every actor's is `-n`.
+        assert.ok(
+          -a.n <= -s.sortN,
+          `${a.id} is drawn on top of ${s.id} ${when}: the hen sorts at ${(-a.n).toFixed(2)}, ` +
+            `the house at ${(-s.sortN).toFixed(2)}`,
+        );
+      }
+    }
+  };
+
+  check('at placement');
+  for (const h of houses) {
+    run(herd, world, 40, { e: h.e, n: h.n });
+    check('after wandering');
+  }
+
+  // The farmyard is small and the flock roams six metres, so some of them do
+  // stand under the eaves — if none ever did, this test would be passing by
+  // never having looked at the case it exists for.
+  assert.ok(underOne > 0, 'no animal ever stood under a house sprite, so nothing was actually tested');
 });
 
 test('a wandering herd stays in its paddock and on its feet', () => {
@@ -215,12 +307,14 @@ test('calls come only from animals near enough to be heard, and not often', () =
   assert.equal(heard, 0, 'an animal on the far side of the valley was heard');
 
   // Standing among them: calls, and each one from a species that is actually
-  // on this farm.
-  const cow = herd.find((a) => a.species === SPECIES.COW) || herd[0];
+  // on this farm. `STOCK` is hens only today, so this deliberately picks any
+  // animal rather than naming one — restocking the table must not silently
+  // turn this half of the test off.
+  const among = herd[0];
   resetCalls(0);
   const calls = [];
   for (let i = 0; i < 60 * 120; i++) {
-    const { called } = updateHerd(herd, world, DT, { player: { e: cow.e, n: cow.n } });
+    const { called } = updateHerd(herd, world, DT, { player: { e: among.e, n: among.n } });
     if (called) calls.push(called);
   }
   assert.ok(calls.length > 0, 'standing in a farmyard for two minutes was silent');

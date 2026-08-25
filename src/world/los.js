@@ -7,6 +7,7 @@
 // corner-to-corner sight fails and the student has to think.
 
 import { segmentHitsCircle, segmentIntersection, closestOnSegment } from '../core/math2d.js';
+import { insideFootprint } from './entities.js';
 
 /** Ignore obstacles hugging either end: you can sight past the tree beside you. */
 const END_SKIP = 0.15;
@@ -121,6 +122,12 @@ export function canSetupTripod(world, e, n, opts = {}) {
     if (ignore.has(ent.id)) continue;
 
     if (ent.seg && ent.seg.length > 1) {
+      // Inside the building counts as an obstacle too — the walls alone leave
+      // the room standable, and a tripod set up in someone's kitchen is not a
+      // survey station.
+      if (insideFootprint(ent, e, n)) {
+        return { ok: false, reason: 'obstacle', detail: { kind: ent.kind, id: ent.id }, ring };
+      }
       const closed = ent.kind === 'benfeitoria';
       const count = closed ? ent.seg.length : ent.seg.length - 1;
       for (let i = 0; i < count; i++) {

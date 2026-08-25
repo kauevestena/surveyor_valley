@@ -17,6 +17,8 @@
 //   * the walk cycle is driven by ground COVERED, so walking into a tree stops
 //     the legs too instead of moonwalking against it.
 
+import { insideFootprint } from '../world/entities.js';
+
 export const WALK_SPEED = 4.5;
 export const RUN_SPEED = 7.0;
 export const REAL_SPEED = 1.4; // what the clock is charged at
@@ -363,6 +365,11 @@ export function canStand(world, e, n, radius = PLAYER_RADIUS) {
     if (!ent.blocksWalk) continue;
 
     if (ent.seg && ent.seg.length > 1) {
+      // The walls, and then the room behind them. Testing the walls alone left
+      // the interior standable, which is a hole a body can be PLACED in even
+      // though it could never walk in: the animals were spawned in the roam
+      // disc around the doorstep, a good part of which is the house itself.
+      if (insideFootprint(ent, e, n)) return false;
       const closed = ent.kind === 'benfeitoria';
       const count = closed ? ent.seg.length : ent.seg.length - 1;
       for (let i = 0; i < count; i++) {

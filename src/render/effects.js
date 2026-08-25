@@ -13,12 +13,18 @@ import { PX_PER_M } from './pixbuf.js';
 import { makePix, P } from './sprites/shared.js';
 import { hash2 } from './pixbuf.js';
 import { UI } from './tokens.js';
+import { BUILDING_OVERHANG } from './sprites/built.js';
+import { GRASS_COVER } from './groundpaint.js';
 
 const SWAY_RADIUS = 11; // metres of grass that reacts
 const SWAY_STEP = 1.5; // spacing of the animated tufts
 const MAX_PARTICLES = 90;
 const MAX_BUTTERFLIES = 3;
 const MAX_GLINTS = 14;
+/** Generous half-span of the largest farmhouse `scatter.js` builds, in metres. */
+const HOUSE_REACH = 14;
+/** Share of grid cells that carry a tuft on full pasture. */
+const SWAY_OCCUPANCY = 0.42;
 
 /**
  * Wind.
@@ -100,10 +106,70 @@ export function makeEffects({ PIXI, atlas, container, camera }) {
   // pass in front of a tree it is standing behind.
   const swayPool = [];
 
-  function updateSway(player, dt) {
+  /**
+   * The ground the nearby buildings cover, as world-metre rectangles.
+   *
+   * Rebuilt once per frame rather than queried per cell: the sway grid is two
+   * hundred odd cells and there is almost never more than one house in reach,
+   * so this turns a couple of hundred spatial queries into one, and the test
+   * each cell then does is four comparisons.
+   */
+  const houseRects = [];
+
+  function collectHouses(player, world) {
+    houseRects.length = 0;
+    if (!world?.spatial) return;
+    // Buildings are indexed by their centre, and a big one reaches half a
+    // dozen metres past it, so the query has to be wider than the sway disc or
+    // a house the player is standing beside is missed.
+    for (const ent of world.spatial.queryCircle(player.e, player.n, SWAY_RADIUS + HOUSE_REACH)) {
+      if (ent.kind !== 'benfeitoria' || !ent.seg || ent.seg.length < 3) continue;
+      let minE = Infinity;
+      let maxE = -Infinity;
+      let minN = Infinity;
+      let maxN = -Infinity;
+      for (const [e, n] of ent.seg) {
+        if (e < minE) minE = e;
+        if (e > maxE) maxE = e;
+        if (n < minN) minN = n;
+        if (n > maxN) maxN = n;
+      }
+      houseRects.push({
+        minE: minE - BUILDING_OVERHANG.side,
+        maxE: maxE + BUILDING_OVERHANG.side,
+        minN: minN - BUILDING_OVERHANG.south,
+        maxN: maxN + BUILDING_OVERHANG.north,
+      });
+    }
+  }
+
+  /** Would a tuft here be standing on a building? */
+  function onBuilding(e, n) {
+    for (const r of houseRects) {
+      if (e >= r.minE && e <= r.maxE && n >= r.minN && n <= r.maxN) return true;
+    }
+    return false;
+  }
+
+  /**
+   * How much grass this spot is entitled to, 0..1.
+   *
+   * Unknown classes answer 1 rather than 0: a soil added later should arrive
+   * grassy and be turned down deliberately, not vanish from this layer with
+   * nobody noticing.
+   */
+  function coverAt(world, e, n) {
+    const terrain = world?.terrain;
+    if (!terrain) return 1;
+    return GRASS_COVER[terrain.soilAt(e, n).id] ?? 1;
+  }
+
+  function updateSway(player, world, dt) {
     const half = Math.ceil(SWAY_RADIUS / SWAY_STEP);
     const baseE = Math.round(player.e / SWAY_STEP) * SWAY_STEP;
     const baseN = Math.round(player.n / SWAY_STEP) * SWAY_STEP;
+
+    collectHouses(player, world);
 
     let used = 0;
     for (let i = -half; i <= half; i++) {
@@ -116,17 +182,43 @@ export function makeEffects({ PIXI, atlas, container, camera }) {
         const gx = Math.round(e / SWAY_STEP);
         const gy = Math.round(n / SWAY_STEP);
         const h = hash2(gx, gy, 211);
-        if (h > 0.42) continue; // most cells stay empty; this is accent, not cover
+        if (h > SWAY_OCCUPANCY) continue; // most cells stay empty; this is accent, not cover
+
+        // The jitter is resolved before the two tests below rather than after,
+        // so that both ask about the spot the tuft will actually stand on. It
+        // reaches 0.6 m and a soil cell is 0.25 m, so gating on the grid point
+        // and then drawing at the jittered one puts tufts several cells inside
+        // the lake they were supposed to stay out of.
+        const jitterE = (hash2(gx, gy, 213) - 0.5) * SWAY_STEP * 0.8;
+        const jitterN = (hash2(gx, gy, 217) - 0.5) * SWAY_STEP * 0.8;
+        const te = e + jitterE;
+        const tn = n + jitterN;
+
+        // This was the one grass in the game that never consulted the world it
+        // was scattered over: the baked pass reads the soil class and the
+        // entity scatter reads the parcel, but a sway tuft appeared wherever
+        // the hash liked — waving on open water and on bare rock.
+        //
+        // Scaling the occupancy rather than switching it off keeps the soil
+        // boundaries ragged. A hard cut would draw this layer's own edge
+        // across ground whose baked grass fades out over several metres, and
+        // two disagreeing outlines of the same marsh is worse than either.
+        if (h > SWAY_OCCUPANCY * coverAt(world, te, tn)) continue;
+
+        // Nor does grass grow through a floor. A tuft SOUTH of a house sorts
+        // after it (`zIndex = -n`) and so drew over the roof: grass sprouting
+        // from the tiles as the player walked up to a sede. The rectangle is
+        // the SPRITE's and not the footprint's, because the front wall and the
+        // eaves are painted outside the ring.
+        if (onBuilding(te, tn)) continue;
 
         const sprite = swayPool[used] || makeSway();
         used++;
         sprite.visible = true;
 
-        const jitterE = (hash2(gx, gy, 213) - 0.5) * SWAY_STEP * 0.8;
-        const jitterN = (hash2(gx, gy, 217) - 0.5) * SWAY_STEP * 0.8;
-        sprite.x = Math.round((e + jitterE) * PX_PER_M);
-        sprite.y = Math.round(-(n + jitterN) * PX_PER_M);
-        sprite.zIndex = -(n + jitterN);
+        sprite.x = Math.round(te * PX_PER_M);
+        sprite.y = Math.round(-tn * PX_PER_M);
+        sprite.zIndex = -tn;
 
         // Idle sway, plus a shove away from the player when they walk through.
         // The shove is the bit that sells it: the world reacts to you.
@@ -347,7 +439,7 @@ export function makeEffects({ PIXI, atlas, container, camera }) {
       // while it was hidden and jump on the way back in.
       if (paused) return;
 
-      updateSway(player, dt);
+      updateSway(player, world, dt);
       updateButterflies(player, dt);
       updateGlints(world, dt);
 

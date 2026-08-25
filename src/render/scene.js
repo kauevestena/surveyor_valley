@@ -19,6 +19,7 @@ import { PX_PER_M } from './pixbuf.js';
 import { DETAIL_ZOOM } from './camera.js';
 import { KIND } from '../world/entities.js';
 import { SIZES } from './sprites/nature.js';
+import { buildingSortNorthing } from './sprites/built.js';
 import { pixi } from './pixi.js';
 import { OCCUPY_RADIUS } from '../game/service.js';
 import { warmPass, P } from './palette.js';
@@ -465,7 +466,7 @@ export function makeScene({ app, camera, atlas, ground }) {
       const frame = key && atlas.get(key);
       if (!frame) continue;
       const sp = takeEntitySprite();
-      place(sp, frame, ent.e, ent.n);
+      place(sp, frame, ent.e, ent.n, sortNorthing(ent));
       // Sprites are pooled, so the tint must be reset every frame — otherwise
       // a marker's gold glow leaks onto whatever unrelated entity reuses its
       // sprite next.
@@ -481,9 +482,10 @@ export function makeScene({ app, camera, atlas, ground }) {
     // ---- the farm ----------------------------------------------------------
     // Drawn with `placeActor`, not `place`: these walk, and `place` rounds to
     // the art grid, which is precisely the jitter that function's own comment
-    // documents. Culled against the same view rect the entities use, with a
-    // margin for a cow — she is nearly two metres of sprite hanging off her
-    // own position.
+    // documents. Culled against the same view rect the entities use, with two
+    // metres of margin: a hen is a small sprite, but the margin is sized for
+    // the largest animal `LIVESTOCK` can paint rather than for the one `STOCK`
+    // happens to plant today.
     for (const a of animals) {
       if (a.e < view.minE - 2 || a.e > view.maxE + 2 || a.n < view.minN - 2 || a.n > view.maxN + 2) continue;
       const af = atlas.get(animalKey(a));
@@ -529,6 +531,15 @@ export function makeScene({ app, camera, atlas, ground }) {
   }
 
   /**
+   * Where an entity sorts, which is not always where it stands. Only buildings
+   * differ, because only they are painted below their own coordinate.
+   */
+  function sortNorthing(ent) {
+    if (ent.kind !== KIND.BENFEITORIA || !ent.seg || ent.seg.length < 3) return ent.n;
+    return buildingSortNorthing(ent.seg);
+  }
+
+  /**
    * Position one sprite. Rounded to whole BASE pixels: the container scale is an
    * integer, so a rounded base pixel is an exact screen pixel and the sprite
    * never lands between two of them.
@@ -536,13 +547,17 @@ export function makeScene({ app, camera, atlas, ground }) {
    * Right for scenery, which does not move: its pixels stay aligned with the
    * ground's. Wrong for anyone walking — see `placeActor`.
    */
-  function place(sprite, frame, e, n) {
+  function place(sprite, frame, e, n, sortN = n) {
     sprite.texture = frame.texture;
     sprite.x = Math.round(e * PX_PER_M - frame.w * frame.ax);
     sprite.y = Math.round(-n * PX_PER_M - frame.h * frame.ay);
     // Far things are drawn first, so a tree to the south overlaps one to the
     // north. That single rule is what gives a top-down scene any depth at all.
-    sprite.zIndex = -n;
+    //
+    // `sortN` defaults to the position, which is right for everything whose
+    // sprite stands ON its own coordinate. A building does not — see
+    // `buildingSortNorthing`.
+    sprite.zIndex = -sortN;
     // Sprites are pooled and reused frame to frame, so a tint has to be given
     // a default here — otherwise the station or the player could inherit the
     // gold "already measured" glow left behind by whichever marker last held

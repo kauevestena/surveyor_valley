@@ -10,7 +10,7 @@ import { makeTerrain } from './terrain.js';
 import { generateParcels, totalArea } from './parcels.js';
 import { scatterWorld } from './scatter.js';
 import { makeSpatialIndex } from './spatial.js';
-import { resetIds, makePlayerMarco, makeResident } from './entities.js';
+import { resetIds, makePlayerMarco, makeResident, insideFootprint } from './entities.js';
 import { canSetupTripod, lineOfSight } from './los.js';
 import { pointInPolygon } from '../core/math2d.js';
 
@@ -162,7 +162,13 @@ export function buildWorld(seed, difficulty) {
       if (!terrain.soilAt(e, n).walkable) return false;
       for (const ent of spatial.queryCircle(e, n, radius + 5)) {
         if (!ent.blocksWalk) continue;
-        if (ent.seg && ent.seg.length > 1) continue; // handled by the slide solver
+        if (ent.seg && ent.seg.length > 1) {
+          // Walls are the slide solver's business — a body resting against one
+          // is still standing somewhere legal. The room behind them is not:
+          // nothing may be PLACED indoors, because nothing could walk out.
+          if (insideFootprint(ent, e, n)) return false;
+          continue;
+        }
         if (Math.hypot(ent.e - e, ent.n - n) < radius + ent.r) return false;
       }
       return true;
