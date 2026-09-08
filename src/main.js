@@ -1837,9 +1837,26 @@ const bootOptions = {
 // Never on file://, where the registration throws.
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => {
-      /* Offline support is a bonus; its absence must never break the game. */
-    });
+    navigator.serviceWorker
+      .register('./sw.js')
+      // ASK for the update rather than assuming `register` did.
+      //
+      // Registering an already-registered script is specified to schedule an
+      // update check, and browsers throttle that one heavily — measured here,
+      // a worker sat `activated` on the previous build for a full minute
+      // across two navigations, still serving the old cache, and the same
+      // registration took the new build within seconds of an explicit
+      // `update()`. Without this, how quickly a deploy reaches a returning
+      // player is the browser's heuristic rather than anything this code
+      // decides, and the failure mode is a player looking at last week's
+      // build with nothing on screen to say so.
+      //
+      // Cheap: one conditional request for a 6 KB file per load, and it is
+      // what makes the `controllerchange` handler below actually fire.
+      .then((reg) => reg.update())
+      .catch(() => {
+        /* Offline support is a bonus; its absence must never break the game. */
+      });
   });
 
   /**
