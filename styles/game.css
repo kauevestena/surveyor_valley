@@ -962,8 +962,16 @@
 }
 
 @media (max-width: 720px) {
+  /* The checklist used to be `display: none` here, which deleted the panel
+     saying what the job wants next from every phone — while `hud.js` was
+     already building a collapse toggle and defaulting it to CLOSED on a coarse
+     pointer. The affordance existed and this rule was overriding it. Narrower,
+     and collapsed until tapped. */
   .checklist {
-    display: none;
+    width: min(250px, 62vw);
+    top: 3.6rem;
+    right: 0.5rem;
+    padding: 0.55rem 0.7rem;
   }
   .hud-bar {
     padding-left: 1rem;
@@ -1325,4 +1333,238 @@
 .theta-2c {
   background: var(--green-soft);
   border: 1px solid #9cc47e;
+}
+
+
+/* ======================================================================== */
+/* Playing with a thumb                                                     */
+/* ======================================================================== */
+/*
+   Everything below applies only under `html.is-touch`, which `game/input.js`
+   sets when the pointer is coarse, OR the viewport is under 720 px, OR a real
+   touch has arrived. Kept in ONE block at the end on purpose: the whole touch
+   pass can be read at once, and lifted out wholesale. Nothing above this line
+   changed except the checklist rule, so a mouse on a normal desktop renders
+   exactly as it did.
+
+   Two tiers, and the split matters. A TABLET is `is-touch` and still wider
+   than 720 px, so it keeps the vertical rail on the left — anything that
+   assumes the rail is a horizontal strip at the bottom belongs in the nested
+   media query, not out here. Getting that wrong stretches the rail between a
+   `top` and a `bottom` it was never given together.
+
+   Sizes come from `--tap` / `--tap-gap` in `base.css`.
+*/
+
+/* ---- tier 1: true wherever a finger is, whatever the width -------------- */
+
+html.is-touch .tool-btn {
+  width: var(--tap);
+  height: var(--tap);
+}
+
+html.is-touch .toolbar {
+  gap: var(--tap-gap);
+  padding: var(--tap-gap);
+}
+
+/* The label a finger could never summon: `.tool-label` is `opacity: 0` until
+   `:hover`, and nothing hovers on a touchscreen, so the rail was eight
+   unexplained icons. WHERE it goes is tier 2 — beside the icon is right for
+   the vertical rail a tablet still has. */
+html.is-touch .tool-label {
+  opacity: 1;
+}
+
+/* `1`-`7` and `M` advertise a keyboard this device has not got. */
+html.is-touch .tool-key {
+  display: none;
+}
+
+/*
+   A floor, not a fixed height: these are text buttons sized by their label,
+   and several already clear it. Measured on a 375 px phone before this
+   change — the HUD's Store / Jobs / sound buttons were 32 px tall, the
+   language toggle 38 px.
+*/
+html.is-touch .btn,
+html.is-touch .hud-btn,
+html.is-touch .lang-btn,
+html.is-touch .diff-btn,
+html.is-touch .chip,
+html.is-touch .checklist-toggle,
+html.is-touch .modal-close {
+  min-height: var(--tap);
+}
+
+/* A taller box wants its label to keep up; these were sized for a mouse. */
+html.is-touch .hud-btn,
+html.is-touch .lang-btn,
+html.is-touch .chip {
+  font-size: 0.9rem;
+  padding-left: 0.9rem;
+  padding-right: 0.9rem;
+}
+
+html.is-touch .hud-sound {
+  min-width: var(--tap);
+  font-size: 1.2rem;
+}
+
+/* Square, so the target matches the glyph rather than a thin strip. */
+html.is-touch .modal-close {
+  min-width: var(--tap);
+  font-size: 1.7rem;
+}
+
+/* Two dialog buttons 0.6rem apart are one mis-tap apart. */
+html.is-touch .modal-actions {
+  gap: var(--tap-gap);
+  flex-wrap: wrap;
+}
+
+html.is-touch .hud-bar {
+  gap: 0.9rem;
+}
+
+html.is-touch .field-actions {
+  gap: var(--tap-gap);
+}
+
+html.is-touch .checklist-toggle {
+  font-size: 0.86rem;
+}
+
+html.is-touch .checklist-item {
+  padding-top: 0.3rem;
+  padding-bottom: 0.3rem;
+}
+
+/* ---- notches and home indicators --------------------------------------- */
+/*
+   `index.html` has said `viewport-fit=cover` since the beginning and no
+   stylesheet has ever mentioned `env()`. That pairing is exactly what puts the
+   HUD under a notch and the controls under a home indicator.
+
+   Every one is `calc(<the existing value> + env(..., 0px))`, so a browser
+   reporting no insets — every desktop, and any phone in portrait without a
+   cutout — keeps precisely the numbers it has today. Each rule also has to
+   name the value from the tier it belongs to, which is why the two that the
+   720 px block overrides appear again below.
+*/
+html.is-touch .hud-bar {
+  padding-top: calc(0.55rem + env(safe-area-inset-top, 0px));
+  padding-right: calc(1rem + env(safe-area-inset-right, 0px));
+}
+
+html.is-touch .thumbstick {
+  bottom: calc(1.1rem + env(safe-area-inset-bottom, 0px));
+  left: calc(1.1rem + env(safe-area-inset-left, 0px));
+}
+
+html.is-touch .field-actions {
+  bottom: calc(4.2rem + env(safe-area-inset-bottom, 0px));
+}
+
+html.is-touch .checklist {
+  right: calc(0.85rem + env(safe-area-inset-right, 0px));
+}
+
+/* ---- tier 2: the rail is a horizontal strip at the bottom --------------- */
+/*
+   Scoped to the same breakpoint that puts it there. A tablet is `is-touch`
+   and wider than this, and keeps the vertical rail — so none of it applies.
+*/
+@media (max-width: 720px) {
+  /*
+     The rail WRAPS, and that is a fix rather than a nicety. Eight tools at the
+     old 46 px already measured 424 px, wider than a 375 px iPhone: the
+     outermost tools were being cut off before any of this. At 56 px it is
+     about 500 px. Capping the width and wrapping gives two tidy rows.
+
+     Wrapping rather than scrolling — a tool you cannot see is a tool you do
+     not know you have, which is the same complaint as the missing labels.
+  */
+  html.is-touch .toolbar {
+    flex-wrap: wrap;
+    justify-content: center;
+    /*
+       `width: max-content` is doing real work here, not tidying.
+
+       The rail is absolutely positioned at `left: 50%`, so its available
+       width — what a shrink-to-fit box gets — is only the space to the RIGHT
+       of the centre line: 188 px on a 375 px phone. Left to that it wrapped
+       into a tall three-across block instead of using the screen. Sizing to
+       content and then clamping lets it lay out across the full width and
+       wrap where the clamp says, not where the centre line does.
+    */
+    width: max-content;
+    max-width: min(92vw, 26rem);
+    /* Room under each button for the label that now sits there. */
+    padding-bottom: calc(var(--tap-gap) + 0.85rem);
+    bottom: calc(0.6rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /*
+     One caption for the rail, naming the SELECTED tool — not eight labels at
+     once.
+
+     Beside the icon is right for the tablet's vertical rail (tier 1) and
+     hopeless here: "Set up the station" is twice the width of the 56 px
+     button it belongs to, so eight of them across two rows collide into an
+     unreadable band. Tried it; it was worse than no labels at all.
+
+     `position: static` on the button is what makes this work. `.tool-label`
+     is absolutely positioned, so dropping the button out of the positioning
+     chain hands it to `.toolbar` instead — the caption then centres on the
+     RAIL rather than on whichever button happens to be active, so it cannot
+     hang off the screen when the leftmost tool is chosen. `.tool-key` is the
+     only other thing positioned inside the button and it is hidden up in
+     tier 1, so nothing else notices.
+
+     The rail's extra bottom padding, set just above, is the band it sits in.
+  */
+  html.is-touch .tool-btn {
+    position: static;
+  }
+
+  html.is-touch .tool-label {
+    opacity: 0;
+  }
+
+  html.is-touch .tool-btn.is-active .tool-label {
+    opacity: 1;
+    left: 50%;
+    top: auto;
+    bottom: 0.25rem;
+    transform: translateX(-50%);
+    font-size: 0.7rem;
+    padding: 0.1rem 0.5rem;
+    max-width: 90%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* The stick sits above the rail here, and the rail has grown a second row. */
+  html.is-touch .thumbstick {
+    bottom: calc(9.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  html.is-touch .field-actions {
+    bottom: calc(9.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  html.is-touch .checklist {
+    right: calc(0.5rem + env(safe-area-inset-right, 0px));
+    /*
+       Bounded, and scrolling inside itself. Opened on a 667 px phone the seven
+       job steps run off the bottom and the last of them — "deliver the plan
+       and the description", the one that ends the job — sits behind the tool
+       rail where it cannot be read. The window left is what remains between
+       this panel's own top and the rail's two rows.
+    */
+    max-height: calc(100dvh - 16rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 }

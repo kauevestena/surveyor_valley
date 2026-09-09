@@ -38,7 +38,7 @@ import {
 } from './game/assistant.js';
 import { makeHerd, updateHerd, interpolatedHerd, haltHerd, resetCalls } from './game/animals.js';
 import { revealMarksNear, applyRevealed, REVEAL_RADIUS } from './game/discovery.js';
-import { makeInput } from './game/input.js';
+import { makeInput, applyTouchMode } from './game/input.js';
 import { makeTools, TOOL, PANEL_TOOLS } from './game/tools.js';
 import { makeTutorial } from './game/tutorial.js';
 import { makeService, OCCUPY_RADIUS } from './game/service.js';
@@ -1816,6 +1816,9 @@ for (const ev of ['visibilitychange', 'pagehide']) {
 
 initLanguage();
 applyI18n(document);
+// Before the intro paints. The face-and-difficulty screen is as full of
+// buttons as the game is, and it is the first thing a phone player touches.
+applyTouchMode();
 
 // A world is fully described by its seed, so a link can carry one. Handy for
 // handing a class the same valley, and for driving a headless screenshot.

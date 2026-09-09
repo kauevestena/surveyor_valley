@@ -41,6 +41,53 @@ const MOVE_KEYS = {
   ArrowRight: [1, 0],
 };
 
+/**
+ * Is this session being played with a thumb?
+ *
+ * The one place that decides, and the only thing that tells the stylesheet so
+ * — `html.is-touch` is what every enlarged control in `game.css` hangs off. It
+ * lives in this file because this file already owns the question: the
+ * thumbstick has been asking it since touch support landed.
+ *
+ * Three signals, because no one of them is enough alone:
+ *
+ *   * a coarse pointer — a phone or a tablet, whatever its width;
+ *   * a viewport under 720 px, the width at which the rail already moves to
+ *     the bottom, and cramped for a mouse too;
+ *   * a touch having actually happened, which is the case NO media query can
+ *     express: a convertible reports a FINE primary pointer right up until
+ *     somebody puts a finger on the screen.
+ *
+ * Deliberately not written as a media query in the CSS. Expressing "coarse OR
+ * narrow OR a touch seen at runtime" there would mean the same breakpoint in
+ * two files, drifting apart the first time one of them is edited.
+ *
+ * Module scope, not `makeInput`, because the INTRO comes first: the player
+ * picks a face, a language and a difficulty before any world exists, on a
+ * screen full of buttons that need to be just as reachable. `main.js` calls
+ * this once at boot, long before there is a canvas to put a thumbstick on.
+ */
+const narrowMq = typeof matchMedia === 'function' ? matchMedia('(max-width: 720px)') : null;
+const coarseMq = typeof matchMedia === 'function' ? matchMedia('(pointer: coarse)') : null;
+let touchHappened = false;
+
+export function applyTouchMode() {
+  if (typeof document === 'undefined') return;
+  const on = touchHappened || Boolean(coarseMq?.matches) || Boolean(narrowMq?.matches);
+  document.documentElement.classList.toggle('is-touch', on);
+}
+
+/** A real touch arrived; from here on this is a touch session for good. */
+function noteTouch() {
+  touchHappened = true;
+  applyTouchMode();
+}
+
+// Rotating a tablet, or dragging a window across the breakpoint. `main.js`
+// re-measures the panels on `resize` already, so the insets that keep map
+// markers clear of the controls follow the new sizes by themselves.
+narrowMq?.addEventListener?.('change', applyTouchMode);
+
 export function makeInput({ canvas, root, camera, bus, EV, onClick, onDoubleClick, onToolKey, onBatchKey, onAct, onHover, onTouch, isModalOpen }) {
   const held = new Set();
   let run = false;
@@ -168,12 +215,36 @@ export function makeInput({ canvas, root, camera, bus, EV, onClick, onDoubleClic
 
   const stickRoot = root ? makeStick(root) : null;
   const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+
+  /**
+   * Is this session being played with a thumb?
+   *
+   * The one place that decides, and the only thing that tells the stylesheet
+   * so — `html.is-touch` is what every enlarged control in `game.css` hangs
+   * off. It lives here because this file already owns the question: the
+   * thumbstick has been asking it since touch support landed.
+   *
+   * Three signals, because no one of them is enough on its own:
+   *
+   *   * a coarse pointer — a phone or a tablet, whatever its width;
+   *   * a viewport under 720 px — the width at which the rail already moves
+   *     to the bottom, and cramped for a mouse too;
+   *   * a touch having actually happened, which is the case NO media query
+   *     can express. A convertible reports a fine primary pointer right up
+   *     until somebody puts a finger on the screen, and that is the machine
+   *     the comment above is about.
+   *
+   * Deliberately not a media query in the CSS: expressing "coarse OR narrow OR
+   * a touch we saw at runtime" there would mean the same numbers written in
+   * two places, drifting apart the first time one of them is edited.
+   */
   if (stickRoot && coarse) showStick();
 
   function showStick() {
     if (touchSeen) return;
     touchSeen = true;
     stickRoot?.node.classList.add('is-on');
+    noteTouch();
     // The stick appears mid-session on a hybrid machine, and it lands in the
     // bottom-left corner where the scale bar already is — so whoever is keeping
     // track of what covers the canvas has to be told.
