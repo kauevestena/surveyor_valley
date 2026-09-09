@@ -82,6 +82,18 @@ body {
 
   --font: ui-rounded, "Segoe UI", Roboto, system-ui, -apple-system, sans-serif;
   --mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+
+  /* ---- touch sizing ------------------------------------------------------
+     The first size tokens in this file, and they are read ONLY from the
+     `html.is-touch` block at the foot of `game.css`. A desktop therefore gains
+     two variables nobody references and renders exactly as it did.
+
+     56 px rather than the 44 px minimum everyone quotes: 44 is the floor below
+     which a target is a miss, not the size at which it is comfortable, and the
+     tool rail is pressed dozens of times a job. The gap matters as much as the
+     box — two 56 px buttons 4 px apart are still one 116 px mistake. */
+  --tap: 56px;
+  --tap-gap: 0.55rem;
 }
 
 body {
@@ -206,8 +218,13 @@ p {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: min(560px, calc(100vw - 2rem));
-  max-height: calc(100vh - 2.5rem);
+  width: min(560px, calc(100dvw - 2rem));
+  /* DYNAMIC viewport height, not `vh`. On a phone `100vh` is the height with
+     the browser chrome retracted, so a tall dialog measured in it overflows
+     the screen you can actually see and takes its buttons with it. `#app` has
+     been `100dvh` all along; this was the one place left behind. The two units
+     are identical on a desktop, so this is not gated on touch. */
+  max-height: calc(100dvh - 2.5rem);
   display: flex;
   flex-direction: column;
   background: var(--panel);

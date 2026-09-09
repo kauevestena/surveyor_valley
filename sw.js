@@ -10,10 +10,27 @@
 // static files; serving them instantly and quietly updating behind the player
 // is both faster and more robust than going to the network first.
 //
-// Bump CACHE_VERSION whenever the file list or the Pixi pin changes; old caches
-// are deleted on activate.
+// BUMP CACHE_VERSION ON EVERY DEPLOY THAT CHANGES ANY FILE IN `CORE`, contents
+// included — not merely when the file LIST or the Pixi pin changes, which is
+// what this note used to say and which is too narrow by exactly the case that
+// bites. Old caches are deleted on activate.
+//
+// Why it is not optional. This worker is cache-first, so a changed file is
+// served from the cache and only refreshed BEHIND the player: the edit lands a
+// reload late at best. `main.js` has a `controllerchange` handler that reloads
+// the moment a new worker takes over, and that is the thing that makes a deploy
+// land at once — but a new worker only installs when THIS FILE's bytes change,
+// and the version string is the only thing in it that ever does. Leave it
+// alone and nothing installs, nothing claims, `controllerchange` never fires,
+// `activate` never runs, and the stale cache is never purged.
+//
+// Measured, not theorised: shipping a content-only change to `game/animals.js`
+// left a browser drawing the previous build's cattle across two full page
+// loads, and would have left an OFFLINE one — the player this worker exists
+// for — drawing them forever, because the background refresh it relies on can
+// never complete.
 
-const CACHE_VERSION = 'sv-v11';
+const CACHE_VERSION = 'sv-v13';
 const PIXI_URL = 'https://cdn.jsdelivr.net/npm/pixi.js@8.19.0/dist/pixi.min.mjs';
 
 /**
