@@ -30,7 +30,7 @@
 // for — drawing them forever, because the background refresh it relies on can
 // never complete.
 
-const CACHE_VERSION = 'sv-v13';
+const CACHE_VERSION = 'sv-v14';
 const PIXI_URL = 'https://cdn.jsdelivr.net/npm/pixi.js@8.19.0/dist/pixi.min.mjs';
 
 /**
@@ -53,7 +53,12 @@ const CORE = [
   './styles/base.css',
   './styles/game.css',
   './styles/report.css',
+  './src/audio/arrange.js',
   './src/audio/audio.js',
+  './src/audio/instruments.js',
+  './src/audio/music.js',
+  './src/audio/theory.js',
+  './src/audio/tracks.js',
   './src/core/bus.js',
   './src/core/loop.js',
   './src/core/math2d.js',

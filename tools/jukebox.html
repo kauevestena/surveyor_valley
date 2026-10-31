@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Surveyor Valley — jukebox</title>
+    <!--
+      Listen to the soundtrack without walking round the valley waiting for it.
+
+      A dev tool, like `sprite-preview.mjs` is for the art: play any piece from
+      any section, solo a part, or render a piece to a WAV through an
+      OfflineAudioContext — the identical graph the game plays, so a level
+      measured here is the level a player hears. Not linked from the game, and
+      nothing it renders is ever committed: the repository ships no audio.
+
+        python3 -m http.server 8080   # from the repository root
+        open http://localhost:8080/tools/jukebox.html
+    -->
+    <style>
+      body { font: 15px/1.45 system-ui, sans-serif; max-width: 52rem; margin: 2rem auto; padding: 0 1rem; color: #2f2418; background: #f6efe1; }
+      h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
+      .piece { background: #fffaf0; border: 2px solid #c9a978; border-radius: 10px; padding: 0.8rem 1rem; margin: 0.9rem 0; }
+      .piece h2 { font-size: 1.1rem; margin: 0; }
+      .meta { color: #7a6448; font-size: 0.9rem; }
+      .row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.5rem; }
+      button, select { font: inherit; padding: 0.25rem 0.7rem; border-radius: 6px; border: 1px solid #a8875a; background: #fff; cursor: pointer; }
+      label { font-size: 0.88rem; }
+      #status { position: sticky; top: 0; background: #f6efe1; padding: 0.4rem 0; font-variant-numeric: tabular-nums; }
+    </style>
+  </head>
+  <body>
+    <h1>Surveyor Valley — jukebox</h1>
+    <p class="meta">The soundtrack, piece by piece. Everything is synthesized in this page; nothing is downloaded but code.</p>
+    <div id="status">stopped</div>
+    <div id="pieces"></div>
+    <script type="module" src="./jukebox.mjs"></script>
+  </body>
+</html>

@@ -1311,6 +1311,13 @@
   opacity: 0.55;
 }
 
+/* The music switch keeps its note when off and strikes it through, so the two
+   buttons stay easy to tell apart: × is "no sound at all", a crossed ♫ "no music". */
+.hud-music.is-off {
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+}
+
 /* Survey-practice switches, beside the action they affect. */
 .chip-toggle {
   font-size: 0.78rem;

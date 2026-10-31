@@ -13,8 +13,16 @@
 //     soil you are standing on, so you hear that you have walked onto marsh
 //     before you look down and find the tripod refuses to stand.
 //
-// Nothing starts until a real user gesture (the intro modal's button), so no
-// autoplay policy is ever violated and the tab never makes noise unbidden.
+// The score is the same: four pieces written as data in `tracks.js`, played
+// by synthesized instruments in `instruments.js`, paced by `music.js`. This
+// file owns the buses and the settings, and is the one door the game knocks on.
+//
+// Nothing starts until a real user gesture — the first touch or key anywhere on
+// the page, which is the intro screen — so no autoplay policy is ever violated
+// and the tab never makes noise unbidden.
+
+import { makeDirector } from './music.js';
+import { shiftFromA } from './theory.js';
 
 const AMBIENT_KEY = 'sv.audio';
 
@@ -23,8 +31,12 @@ const MASTER_GAIN = 0.9;
 const MUSIC_GAIN = 0.14;
 const SFX_GAIN = 0.85;
 
-/** A pentatonic scale, in semitones from the root. Nothing can sound wrong. */
-const PENTATONIC = [0, 2, 4, 7, 9, 12, 14, 16];
+/**
+ * Every pitched effect is built on A3 — and then moved into the key of the
+ * piece that is playing, by at most a tritone. Left on A, the observation
+ * chime's C♯ would land a semitone off the C of the F-major waltz; following
+ * the music, every chime is a note of the song.
+ */
 const ROOT_HZ = 220; // A3
 
 /** Soil id -> how a boot sounds on it. */
@@ -46,8 +58,11 @@ export function makeAudio() {
   let sfxGain = null;
   let noiseBuffer = null;
   let started = false;
-  let ambientTimer = null;
   let birdTimer = null;
+  let director = null;
+  /** Asked for before the context existed; applied the moment it does. */
+  let scene = null;
+  let root = ROOT_HZ;
 
   let settings = load();
 
@@ -74,7 +89,13 @@ export function makeAudio() {
    * @returns {boolean} whether audio is available at all
    */
   function start() {
-    if (started) return true;
+    if (started) {
+      // Called again from a later gesture: this is the call that is allowed to
+      // wake a context the browser created suspended — iOS in particular only
+      // lets a touch that has ENDED start the sound.
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      return true;
+    }
     const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
     if (!AC) return false;
 
@@ -107,7 +128,15 @@ export function makeAudio() {
     // `visibilitychange` to happen along is the difference between a silent
     // session and a noisy one.
     if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-    scheduleAmbient();
+    director = makeDirector({
+      ctx,
+      out: musicGain,
+      audible: () => ok() && settings.music,
+      onKey: (tonic) => {
+        root = ROOT_HZ * Math.pow(2, shiftFromA(tonic) / 12);
+      },
+    });
+    if (scene) director.setScene(scene);
     scheduleBirds();
     return true;
   }
@@ -173,36 +202,9 @@ export function makeAudio() {
     osc.stop(t + decay + 0.03);
   }
 
-  const semi = (n) => ROOT_HZ * Math.pow(2, n / 12);
+  const semi = (n) => root * Math.pow(2, n / 12);
 
   // ---- ambience -----------------------------------------------------------
-
-  /**
-   * A slow pad that re-voices every few seconds. Two notes from the pentatonic
-   * set, so consecutive voicings can never clash however they overlap.
-   */
-  function scheduleAmbient() {
-    clearTimeout(ambientTimer);
-    if (!started) return;
-
-    const play = () => {
-      if (ok() && settings.music) {
-        const base = PENTATONIC[Math.floor(Math.random() * 4)];
-        for (const step of [base, base + PENTATONIC[2 + Math.floor(Math.random() * 3)]]) {
-          tone({
-            freq: semi(step) / 2,
-            type: 'triangle',
-            gain: 0.09,
-            attack: 1.6,
-            decay: 5.5,
-            dest: musicGain,
-          });
-        }
-      }
-      ambientTimer = setTimeout(play, 6500 + Math.random() * 4000);
-    };
-    ambientTimer = setTimeout(play, 800);
-  }
 
   /** Birdsong: two or three quick descending chirps, at random intervals. */
   function scheduleBirds() {
@@ -246,6 +248,29 @@ export function makeAudio() {
     },
     get musicOn() {
       return settings.music;
+    },
+    /** Whether the browser is actually letting us make sound yet. */
+    get running() {
+      return Boolean(ctx && ctx.state === 'running');
+    },
+
+    /**
+     * `'title'` while the intro is up and at the end of the campaign, `'field'`
+     * during play. Safe to call before `start()`: it is remembered.
+     */
+    setScene(name) {
+      scene = name;
+      director?.setScene(name);
+    },
+
+    /** A new job — the field piece fades and the next one comes in. */
+    nextTrack() {
+      director?.nextTrack();
+    },
+
+    /** What the soundtrack is doing, for the debug handle. */
+    get nowPlaying() {
+      return director ? director.nowPlaying : { scene, state: started ? 'idle' : 'off' };
     },
 
     setMuted(v) {
