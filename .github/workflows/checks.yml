@@ -71,12 +71,12 @@ jobs:
         with:
           node-version: '22'
 
-      # Twenty-six of the eighty-five modules under src/ are never imported by any
-      # test — the whole of ui/, plus main.js, scene.js, overlays.js,
-      # effects.js and audio.js — because they need a DOM. Nothing stands
+      # Twenty-five of the eighty-six modules under src/ are never imported by
+      # any test — most of ui/, plus main.js, game/input.js, scene.js,
+      # overlays.js and effects.js — because they need a DOM. Nothing stands
       # between those files and GitHub Pages: no bundler, no type checker, not
       # even a parse. A stray character in `ui/hud.js` ships a game that opens
-      # to a black screen, and all 273 tests still pass.
+      # to a black screen, and all 285 tests still pass.
       #
       # This is the cheapest net that catches it, and it is the only check in
       # the repository that looks at those files at all.

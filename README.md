@@ -43,7 +43,7 @@ têm valor legal.**
 
 | | |
 | --- | --- |
-| **Walk** | `W A S D` or the arrow keys · `Shift` to run · a thumbstick on a touchscreen |
+| **Walk** | `W A S D` or the arrow keys · `Shift` to run · on a touchscreen, drag in the lower left of the map |
 | **Tools** | `1`–`7` for the rail down the left-hand side · `M` for the map |
 | **Plant a marco** | `Space` puts one at your feet; click firm ground further off and Ligeirinho runs out and plants it there |
 | **Aim** | click a corner — he carries the prism to it, and the reading lands when he arrives |
@@ -84,7 +84,7 @@ matters in a classroom. For an air-gapped lab, drop the Pixi bundle at
 ## Tests
 
 ```bash
-node --test            # 273 of them, no install, no dependencies
+node --test            # 285 of them, no install, no dependencies
 ```
 
 Node 20 runs ESM and ships a test runner, and everything under `src/core/`, `src/survey/`,

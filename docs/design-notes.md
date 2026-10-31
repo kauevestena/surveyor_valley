@@ -31,7 +31,8 @@ memorial descritivo, without a browser.
 - `tests/pipeline.test.mjs` — a whole service, end to end, plus the documents it produces.
 - `tests/movement.test.mjs` — walking: the speed ramps, the turn, and the slide along a
   fence, a tree and the water line. Also that being stopped by something stops the legs,
-  which is the difference between a walk cycle and a sprite scrubbing in place.
+  which is the difference between a walk cycle and a sprite scrubbing in place — and that
+  a footstep sounds once per footfall, on the frame where a foot is seen to land.
 - `tests/assistant.test.mjs` — Ligeirinho. Mostly the ways an errand can FAIL, because a
   reading now waits for him: a corner he cannot reach gives up rather than never arriving,
   a merely long run is not mistaken for a stuck one, a 45 m/s dash does not step over a
@@ -58,9 +59,9 @@ memorial descritivo, without a browser.
 - `tests/offline.test.mjs` — the service worker's precache list matches the files on disk,
   the PixiJS pin, its SRI hash and the cached URL all agree, and a vendored copy of Pixi
   resolves next to the page rather than next to the module that imports it.
-Twenty-six of the eighty-five modules under `src/` are imported by no test at all — the whole
-of `ui/`, plus `main.js`, `scene.js`, `overlays.js`, `effects.js` and `audio.js` — because
-they need a DOM. Nothing else stands between them and GitHub Pages: no bundler, no type
+Twenty-five of the eighty-six modules under `src/` are imported by no test at all — most
+of `ui/`, plus `main.js`, `game/input.js`, `scene.js`, `overlays.js` and `effects.js` —
+because they need a DOM. Nothing else stands between them and GitHub Pages: no bundler, no type
 checker, not even a parse. So CI's second job parses every shipped module as ESM, which is
 the only check in the repository that looks at those files, and the only thing that would
 catch a stray character in `ui/hud.js` shipping a black screen past a green test suite.
@@ -79,7 +80,12 @@ catch a stray character in `ui/hud.js` shipping a black screen past a green test
   refuses what a browser refuses — a non-finite value, an exponential ramp to zero, a
   source started and never stopped. The plucked strings are in tune to under three
   cents, and the director paces it: a piece, quiet, a different piece, and nothing
-  scheduled while the music is off.
+  scheduled while the music is off. The footsteps are held here too: every soil has
+  one, none of them rings like a note, and the soils still sound like different ground.
+- `tests/stick.test.mjs` — the floating thumbstick never lands on a button. Five screen
+  sizes measured from the running game, each as it opens, with the batch bar up and with
+  the checklist unfolded, and a thumb tried every six pixels across the stick's corner of
+  every one of them.
 
 ## How it is put together
 
@@ -214,7 +220,13 @@ tests/
   1280 px right inset, walling off the whole canvas.
 - **Touch joins `input.intent()` rather than bypassing it.** The thumbstick contributes a
   unit direction and a deflection past 70% stands in for Shift, so `game/player.js` does
-  not know touch exists. `setPointerCapture` is wrapped, because it throws whenever the
+  not know touch exists. **The stick floats, and a tap is still a tap.** A thumb coming
+  down in the lower-left quarter of the map brings the stick up under it; it walks only
+  once the thumb has travelled further than a tap ever does, and a touch that lifts
+  quickly without travelling is handed to the map as the tap it was — so sighting a
+  corner or sending Ligeirinho works there as anywhere. A second finger before the first
+  has moved turns both into a pinch. None of the stick takes a pointer; the canvas keeps
+  every touch, which is what keeps double-tap fast travel working inside its corner. `setPointerCapture` is wrapped, because it throws whenever the
   pointer has already gone — and an uncaught throw there took the whole `pointerdown`
   branch down with it, silently disabling pinch and two-finger pan.
 - **Documents are not part of the game skin.** `styles/report.css` stays clean white
@@ -302,6 +314,16 @@ downbeat. An allpass supplies the fraction of a sample the delay line cannot, wh
 every string within a cent of true — rounded to whole samples, the top of the harp would be
 tens of cents sharp. The string pad and the round bass share one filter per instrument
 rather than one per note, and a note's envelope stops it at -43 dB.
+
+**The footsteps sound once per footfall.** `STRIDE` was documented as a whole four-frame
+cycle and is one frame, so the footstep — meant to fire on every half stride — fired on
+every half frame: eight sounds to the two footfalls drawn, 12.5 a second at a walk and
+20.5 at a run, overlapping into a hiss. `player.js#footfall` fires on the two stride
+frames instead. The steps themselves were made soft, warm and unpitched: the rock step
+was a resonant tock at Q 3.2 and every other step alternated between two bands about a
+minor third apart, a tick-tock tune in no key. Measured against the music at game level, a walk
+on grass now sits 21 dB under it with peaks around -30 dBFS, where grass, scrub and sand
+used to sit 11 to 16 dB under it; `STEP_GAIN` in `audio.js` is the one knob.
 
 **To listen without walking round the valley**, serve the repository and open
 `tools/jukebox.html`: any piece from any section, any part soloed, or a piece rendered to
@@ -428,6 +450,24 @@ sede. There is a thumbstick, pinch to zoom (stepped to the same rungs, because t
 pixel-exact only at whole multiples of 16 px/m), two fingers to pan, and tap to act. The
 roteiro folds into its title bar, since on a 1024 px tablet it covered a quarter of the
 play area and silently swallowed every tap that landed on it.
+
+**The thumbstick never sits on a button.** It was a fixed pad placed by CSS offsets, and
+measured in Chromium it overlapped the tool rail on four of five touch layouts — 16 px
+into the phone rail, 21 px into a landscape tablet's — because no offset in a stylesheet
+can know how tall the rail has grown. Now it floats, a quarter bigger, and its place is
+computed: `game/stick.js` takes the panels actually on screen and puts the stick, at rest
+or under a thumb, where neither the base nor the knob at full tilt touches any of them,
+and `input.js` re-measures on every layout change and every touch. The buttons are hard
+obstacles; the checklist and the tool captions are soft ones, kept clear of whenever there
+is room — unfolded across a small phone the checklist leaves none, and then the stick
+keeps its place beneath the panel rather than disappearing while the player reads. The
+compass, the scale bar and the edge markers dodge it exactly.
+
+Two things measured on the way were already broken, on a screen held sideways. The tool
+rail is 534 px tall, and on an 844x390 phone it ran off the top and the bottom of the
+screen — the outermost tools could not be pressed; on any touch screen up to 820 px tall
+it is two columns now. And the checklist, unfolded, ran 150 px past the bottom; it scrolls
+inside itself instead.
 
 **The caderneta exports as CSV** — one row per observation with its setup context repeated,
 carrying both the observed reduction and the compensated one. It is the artefact a student
