@@ -1477,6 +1477,60 @@ html.is-touch .checklist {
   right: calc(0.85rem + env(safe-area-inset-right, 0px));
 }
 
+/* ---- tier 1b: the vertical rail, on a screen too short for it ---------- */
+/*
+   One column of eight 56 px tools is 534 px tall. On a phone held sideways
+   that is taller than the screen — measured on an 844x390 one, the rail ran
+   from 72 px above the top to 72 px below the bottom, and the outermost tools
+   could not be pressed at all — and on a 1024x768 tablet it reached so far
+   down the left edge that the thumbstick had nowhere to wait. Two columns
+   halve it.
+
+   Eight captions beside eight icons cannot work across two columns, so it is
+   the phone tier's answer again: one caption, naming the selected tool, here
+   beside the top of the rail, clear of the thumbstick's corner.
+*/
+@media (min-width: 721px) and (max-height: 820px) {
+  html.is-touch .toolbar {
+    display: grid;
+    grid-template-columns: repeat(2, var(--tap));
+  }
+
+  html.is-touch .tool-btn {
+    position: static;
+  }
+
+  html.is-touch .tool-label {
+    opacity: 0;
+  }
+
+  html.is-touch .tool-btn.is-active .tool-label {
+    opacity: 1;
+    top: 0.5rem;
+    transform: none;
+  }
+}
+
+/* The checklist unfolds downward with nothing to stop it: measured on an
+   844x390 phone, opened, it ran to 542 px — the last job steps were below the
+   screen. Bounded to what is left under its own top, and scrolling inside. */
+@media (min-width: 721px) and (max-height: 820px) {
+  html.is-touch .checklist {
+    max-height: calc(100dvh - 5.5rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+/* Shorter still, the rail cannot be centred without running under the HUD;
+   it hangs from just below it instead. */
+@media (min-width: 721px) and (max-height: 460px) {
+  html.is-touch .toolbar {
+    top: calc(4.9rem + env(safe-area-inset-top, 0px));
+    transform: none;
+  }
+}
+
 /* ---- tier 2: the rail is a horizontal strip at the bottom --------------- */
 /*
    Scoped to the same breakpoint that puts it there. A tablet is `is-touch`
