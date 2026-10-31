@@ -31,8 +31,8 @@ export default {
   'intro.tagline':
     'Você é um topógrafo em um vale rural. Seis propriedades rurais precisam de levantamento planimétrico — e os proprietários estão esperando.',
   'intro.controlsTitle': 'Controles',
-  'intro.stickKeys': 'Alavanca (canto inferior esquerdo)',
-  'intro.stickDesc': 'Andar pelo terreno; empurre até o fim para correr',
+  'intro.stickKeys': 'Arraste no canto inferior esquerdo',
+  'intro.stickDesc': 'Ponha o polegar em qualquer ponto do canto inferior esquerdo do mapa e arraste para andar; arraste mais para correr. Um toque rápido ali continua agindo no mapa',
   'intro.tapKeys': 'Toque',
   'intro.tapDesc': 'Agir com a ferramenta ativa no ponto tocado: visar um alvo, ou mandar o Ligeirinho implantar um marco ali',
   'intro.pinchKeys': 'Pinça',

@@ -252,6 +252,9 @@ function buildView(alpha = 1) {
 
 function measureSafeArea() {
   if (!canvas) return;
+  // The stick waits wherever the panels leave room for it, so it is settled
+  // FIRST — the corner it rests in is one of the things measured below.
+  input?.layoutStick();
   const view = canvas.getBoundingClientRect();
   const inset = { top: 0, right: 0, bottom: 0, left: 0 };
 
@@ -286,6 +289,13 @@ function measureSafeArea() {
   inset.right = Math.min(inset.right, view.width * 0.25);
   inset.top = Math.min(inset.top, view.height * 0.25);
   inset.bottom = Math.min(inset.bottom, view.height * 0.25);
+
+  // And where exactly the stick waits, for what must dodge it precisely: one
+  // edge each is too coarse for something sitting in a corner.
+  const stick = root.querySelector('.thumbstick.is-on:not(.is-homeless)')?.getBoundingClientRect();
+  if (stick?.width) {
+    inset.stick = { left: stick.left - view.left, top: stick.top - view.top, right: stick.right - view.left, bottom: stick.bottom - view.top };
+  }
   safeArea = inset;
 }
 

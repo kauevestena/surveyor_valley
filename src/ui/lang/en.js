@@ -33,8 +33,8 @@ export default {
   'intro.tagline':
     'You are the valley’s surveyor. Six rural properties need a plane survey — and their owners are waiting.',
   'intro.controlsTitle': 'Controls',
-  'intro.stickKeys': 'Thumbstick (bottom left)',
-  'intro.stickDesc': 'Walk; push it all the way to run',
+  'intro.stickKeys': 'Drag, lower left of the map',
+  'intro.stickDesc': 'Put a thumb down anywhere in the lower left of the map and drag to walk; drag further to run. A quick tap there still acts on the map',
   'intro.tapKeys': 'Tap',
   'intro.tapDesc': 'Act with the current tool where you tapped: sight a target, or send Ligeirinho to plant a marco there',
   'intro.pinchKeys': 'Pinch',

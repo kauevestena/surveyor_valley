@@ -94,6 +94,9 @@ body {
      box — two 56 px buttons 4 px apart are still one 116 px mistake. */
   --tap: 56px;
   --tap-gap: 0.55rem;
+  /* The floating thumbstick, base and knob. Smaller on a phone; see game.css. */
+  --stick-size: 9rem;
+  --stick-knob: 4rem;
 }
 
 body {

@@ -513,8 +513,22 @@ export function makeOverlays({ camera }) {
   function drawCompassAndScale(ctx, safe) {
     // Nudged clear of whatever is in the bottom-left corner — which on a tablet
     // is the thumbstick, sitting exactly where the scale bar used to be.
-    const x = 26 + (safe?.left || 0);
+    let x = 26 + (safe?.left || 0);
     const y = camera.vh - 30 - (safe?.bottom || 0);
+
+    // Scale bar: a round number of metres, sized to the current zoom.
+    const targets = [1, 2, 5, 10, 20, 50, 100, 200, 500];
+    const wanted = 110 / camera.zoom;
+    const metres = targets.find((t) => t >= wanted) || 500;
+    const px = metres * camera.zoom;
+
+    // The edge insets are coarse — a corner panel can only claim one edge — so
+    // the stick, which waits in a corner, is dodged exactly: if the arrow and
+    // the bar would land on it, they go to its right instead.
+    const stick = safe?.stick;
+    if (stick && x - 10 < stick.right && x + px + 10 > stick.left && y - 64 < stick.bottom && y + 18 > stick.top) {
+      x = stick.right + 26;
+    }
 
     ctx.save();
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
@@ -534,12 +548,6 @@ export function makeOverlays({ camera }) {
     ctx.font = font(11, 700);
     ctx.textAlign = 'center';
     ctx.fillText('N', x, y - 52);
-
-    // Scale bar: a round number of metres, sized to the current zoom.
-    const targets = [1, 2, 5, 10, 20, 50, 100, 200, 500];
-    const wanted = 110 / camera.zoom;
-    const metres = targets.find((t) => t >= wanted) || 500;
-    const px = metres * camera.zoom;
 
     ctx.strokeStyle = '#1f2a33';
     ctx.lineWidth = 2;
@@ -574,12 +582,21 @@ export function makeOverlays({ camera }) {
     const cx = camera.vw / 2;
     const cy = camera.vh / 2;
     const ang = Math.atan2(y - cy, x - cx);
-    return {
-      inside,
-      ang,
-      px: Math.max(left, Math.min(right, cx + Math.cos(ang) * camera.vw)),
-      py: Math.max(top, Math.min(bottom, cy + Math.sin(ang) * camera.vh)),
-    };
+    let px = Math.max(left, Math.min(right, cx + Math.cos(ang) * camera.vw));
+    let py = Math.max(top, Math.min(bottom, cy + Math.sin(ang) * camera.vh));
+
+    // The stick waits in the bottom-left of that frame, and one edge per panel
+    // cannot describe a corner: a marker that would land on it steps off it,
+    // to the right or upward, whichever is the shorter step.
+    const s = safe?.stick;
+    const pad = m / 2;
+    if (s && px > s.left - pad && px < s.right + pad && py > s.top - pad && py < s.bottom + pad) {
+      const right2 = s.right + pad;
+      const up = s.top - pad;
+      if (right2 - px <= py - up && right2 <= right) px = right2;
+      else py = Math.max(top, up);
+    }
+    return { inside, ang, px, py };
   }
 
   /**

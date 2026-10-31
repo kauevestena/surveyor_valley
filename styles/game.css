@@ -768,19 +768,21 @@
  * desktop would be clutter, and one that only appeared on a media query would
  * miss the convertible laptop that reports a fine pointer AND has a screen you
  * can poke.
+ *
+ * It floats: `.thumbstick` is only the place it waits, put there by
+ * `game/input.js#layoutStick` from the panels actually on screen — a fixed
+ * offset here could not know how tall the rail had grown, and sat on it in
+ * four layouts out of five. The base travels to the thumb and glides back. No
+ * part of it takes a pointer; the canvas underneath keeps every touch.
  */
 .thumbstick {
   position: absolute;
   display: none;
   left: 1.1rem;
   bottom: 1.1rem;
-  width: 7.5rem;
-  height: 7.5rem;
-  border-radius: 50%;
-  background: rgba(40, 24, 8, 0.28);
-  border: 3px solid rgba(255, 245, 226, 0.35);
-  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.3);
-  touch-action: none;
+  width: var(--stick-size);
+  height: var(--stick-size);
+  pointer-events: none;
   z-index: 6;
 }
 
@@ -788,27 +790,71 @@
   display: block;
 }
 
+/* Nowhere on screen could hold it — a panel opened over the whole quarter. */
+.thumbstick.is-homeless {
+  visibility: hidden;
+}
+
+/* Faint while it waits, so it says "there is a stick here" without being a
+   panel over the map; whole while a thumb is on it. It jumps to the thumb at
+   once — only the fade is eased — and glides home when the thumb lifts. */
+.thumbstick-base {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 42%, rgba(255, 245, 226, 0.18), rgba(40, 24, 8, 0.3) 72%);
+  border: 3px solid rgba(255, 245, 226, 0.5);
+  box-shadow: 0 6px 18px rgba(40, 24, 8, 0.25), inset 0 2px 10px rgba(0, 0, 0, 0.22);
+  opacity: 0.5;
+  transition:
+    transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 0.2s ease;
+}
+
+.thumbstick.is-active .thumbstick-base {
+  opacity: 1;
+  transition: opacity 0.08s ease;
+}
+
 .thumbstick-knob {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 3.4rem;
-  height: 3.4rem;
-  margin: -1.7rem 0 0 -1.7rem;
+  width: var(--stick-knob);
+  height: var(--stick-knob);
+  margin: calc(var(--stick-knob) / -2) 0 0 calc(var(--stick-knob) / -2);
   border-radius: 50%;
-  background: rgba(247, 234, 208, 0.9);
+  background: rgba(247, 234, 208, 0.95);
   border: 3px solid var(--wood-dark);
-  box-shadow: 0 2px 0 var(--wood-shadow);
+  box-shadow:
+    0 3px 0 var(--wood-shadow),
+    0 6px 12px rgba(40, 24, 8, 0.3);
+  transition: transform 0.16s ease-out;
   will-change: transform;
 }
 
-/* The rail moves to the bottom centre below 720 px; keep the stick clear of it
-   by putting it above the rail rather than beside it. */
+/* Under the thumb the knob follows exactly; it only eases on the way home. */
+.thumbstick.is-dragging .thumbstick-knob {
+  transition: none;
+}
+
+/* Where the notch and the home bar are, measured by `input.js`: the stick must
+   not wait under either. Invisible, and takes no pointer. */
+.thumbstick-insets {
+  position: fixed;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px)
+    env(safe-area-inset-left, 0px);
+}
+
+/* A little smaller on a phone, and still bigger than the 104 px pad it
+   replaced: room for a thumb to find the middle without looking. */
 @media (max-width: 720px) {
-  .thumbstick {
-    bottom: 5.2rem;
-    width: 6.5rem;
-    height: 6.5rem;
+  :root {
+    --stick-size: 8.25rem;
+    --stick-knob: 3.75rem;
   }
 }
 
@@ -1464,11 +1510,6 @@ html.is-touch .hud-bar {
   padding-right: calc(1rem + env(safe-area-inset-right, 0px));
 }
 
-html.is-touch .thumbstick {
-  bottom: calc(1.1rem + env(safe-area-inset-bottom, 0px));
-  left: calc(1.1rem + env(safe-area-inset-left, 0px));
-}
-
 html.is-touch .field-actions {
   bottom: calc(4.2rem + env(safe-area-inset-bottom, 0px));
 }
@@ -1604,11 +1645,6 @@ html.is-touch .checklist {
     max-width: 90%;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  /* The stick sits above the rail here, and the rail has grown a second row. */
-  html.is-touch .thumbstick {
-    bottom: calc(9.5rem + env(safe-area-inset-bottom, 0px));
   }
 
   html.is-touch .field-actions {

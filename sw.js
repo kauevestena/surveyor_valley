@@ -74,6 +74,7 @@ const CORE = [
   './src/game/timer.js',
   './src/game/player.js',
   './src/game/service.js',
+  './src/game/stick.js',
   './src/game/tools.js',
   './src/game/traverseLoop.js',
   './src/game/tutorial.js',

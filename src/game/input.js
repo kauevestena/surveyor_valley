@@ -16,6 +16,7 @@
 // `game/player.js` does not know any of this exists.
 
 import { TOOL_KEYS } from './tools.js';
+import { stickZone, placeStick, restPosition, stickVector, inside, STICK_GAP } from './stick.js';
 
 /**
  * Past this fraction of full deflection the surveyor runs.
@@ -210,8 +211,18 @@ export function makeInput({ canvas, root, camera, bus, EV, onClick, onDoubleClic
   // a convertible laptop reports BOTH a fine and a coarse pointer, so the media
   // query alone leaves the stick hidden on exactly the machine that has a
   // touchscreen and a mouse.
-  const stick = { e: 0, n: 0, active: false, id: null, cx: 0, cy: 0 };
+  //
+  // The stick FLOATS: a thumb coming down anywhere in the lower-left quarter of
+  // the map brings it up under that thumb, and a drag walks. It used to be a
+  // fixed pad, for a reason that was right — a stick that appears wherever a
+  // thumb lands steals the taps that sight a corner and send Ligeirinho off —
+  // and the answer here is to give them back: a touch that lifts again quickly
+  // without travelling is a TAP, and is handed to the map exactly as a tap
+  // anywhere else would be. Only a drag is the stick's.
+  const stick = { e: 0, n: 0, id: null, engaged: false, x0: 0, y0: 0, x: 0, y: 0, at: 0, moved: 0 };
   let touchSeen = false;
+  /** Where the stick may go, measured from the panels on screen. See `layoutStick`. */
+  let place = null;
 
   const stickRoot = root ? makeStick(root) : null;
   const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
@@ -247,53 +258,115 @@ export function makeInput({ canvas, root, camera, bus, EV, onClick, onDoubleClic
     noteTouch();
     // The stick appears mid-session on a hybrid machine, and it lands in the
     // bottom-left corner where the scale bar already is — so whoever is keeping
-    // track of what covers the canvas has to be told.
+    // track of what covers the canvas has to be told. That is also what lays
+    // the stick out: `main.js#measureSafeArea` calls `layoutStick` first.
     onTouch?.();
   }
 
-  function setKnob() {
+  /**
+   * Measure what is on screen and settle the stick where it waits.
+   *
+   * Everything a thumb could press, which the stick never touches, and the
+   * panels it keeps clear of when it can — the checklist, the tool captions
+   * (see `placeStick`). Toasts are left out on purpose: they pass through
+   * touches and are gone in seconds. Run on every layout change —
+   * `main.js` calls it from `measureSafeArea` — and again on every touch, so
+   * a batch bar that appeared a moment ago is already an obstacle.
+   */
+  function layoutStick() {
+    if (!stickRoot || !touchSeen) return null;
+    const frame = canvas.getBoundingClientRect();
+    const base = stickRoot.base.getBoundingClientRect();
+    const knob = stickRoot.knob.getBoundingClientRect();
+    if (!base.width || !frame.width) return null;
+
+    const radius = base.width / 2;
+    // The knob may travel until a quarter of it hangs over the rim, and it is
+    // the knob's reach, not the base, that must stay off the panels.
+    const travel = radius - knob.width / 4;
+    const reach = Math.max(radius, travel + knob.width / 2);
+
+    const obstacles = panels(HARD);
+    const soft = panels(SOFT);
+    const insets = safeInsets(stickRoot.insets);
+    const view = { width: frame.right, height: frame.bottom };
+    const zone = stickZone({ view, obstacles, radius: reach, gap: STICK_GAP, insets });
+    const rest = restPosition({ ...zone, obstacles, soft, radius: reach, gap: STICK_GAP });
+    place = { ...zone, obstacles, soft, radius, reach, travel, rest };
+
+    if (rest) {
+      const host = stickRoot.node.offsetParent?.getBoundingClientRect() ?? { left: 0, top: 0 };
+      stickRoot.node.style.left = `${rest.x - radius - host.left}px`;
+      stickRoot.node.style.top = `${rest.y - radius - host.top}px`;
+      stickRoot.node.style.bottom = 'auto';
+    }
+    stickRoot.node.classList.toggle('is-homeless', !rest);
+    return place;
+  }
+
+  /** Put the base under (or as near as it may go to) `centre`, and the knob at `knob`. */
+  function drawStick(centre, knob) {
+    if (!stickRoot || !place?.rest) return;
+    stickRoot.base.style.transform = centre ? `translate(${centre.x - place.rest.x}px, ${centre.y - place.rest.y}px)` : '';
+    stickRoot.knob.style.transform = knob ? `translate(${knob.x}px, ${knob.y}px)` : '';
+  }
+
+  /** A thumb came down. If it is in the stick's quarter, it is the stick's — for now. */
+  function startStick(ev) {
+    if (!stickRoot || stick.id != null) return false;
+    const at = layoutStick();
+    const point = { x: ev.clientX, y: ev.clientY };
+    if (!at?.rest || !inside(point, at.touch)) return false;
+    const centre = placeStick(point, { free: at.free, obstacles: at.obstacles, soft: at.soft, radius: at.reach, gap: STICK_GAP });
+    if (!centre) return false;
+
+    Object.assign(stick, { id: ev.pointerId, engaged: false, x0: point.x, y0: point.y, x: point.x, y: point.y, at: Date.now(), moved: 0, e: 0, n: 0 });
+    stickRoot.node.classList.add('is-active');
+    drawStick(centre, null);
+    capture(canvas, ev.pointerId);
+    return true;
+  }
+
+  function moveStick(ev) {
+    stick.x = ev.clientX;
+    stick.y = ev.clientY;
+    const dx = stick.x - stick.x0;
+    const dy = stick.y - stick.y0;
+    stick.moved = Math.max(stick.moved, Math.hypot(dx, dy));
+    // A tap may wobble; a drag is a drag once it has gone further than a tap
+    // ever does. Until then the surveyor does not move.
+    if (!stick.engaged && stick.moved > TAP_SLOP) stick.engaged = true;
+    if (!stick.engaged) return;
+    const v = stickVector(dx, dy, place.travel);
+    stick.e = v.e;
+    stick.n = v.n;
+    stickRoot.node.classList.add('is-dragging');
+    stickRoot.knob.style.transform = `translate(${v.knob.x}px, ${v.knob.y}px)`;
+  }
+
+  /** Back to rest, gliding, with nothing held. */
+  function releaseStick() {
+    Object.assign(stick, { id: null, engaged: false, e: 0, n: 0, moved: 0 });
     if (!stickRoot) return;
-    stickRoot.knob.style.transform = `translate(${stick.e * 34}px, ${-stick.n * 34}px)`;
+    stickRoot.node.classList.remove('is-active', 'is-dragging');
+    drawStick(null, null);
   }
 
-  if (stickRoot) {
-    on(stickRoot.node, 'pointerdown', (ev) => {
-      ev.preventDefault();
-      const r = stickRoot.node.getBoundingClientRect();
-      stick.active = true;
-      stick.id = ev.pointerId;
-      stick.cx = r.left + r.width / 2;
-      stick.cy = r.top + r.height / 2;
-      capture(stickRoot.node, ev.pointerId);
-      aimStick(ev);
-    });
-    on(stickRoot.node, 'pointermove', (ev) => {
-      if (!stick.active || ev.pointerId !== stick.id) return;
-      aimStick(ev);
-    });
-    const release = (ev) => {
-      if (!stick.active || (ev && ev.pointerId !== stick.id)) return;
-      stick.active = false;
-      stick.id = null;
-      stick.e = 0;
-      stick.n = 0;
-      setKnob();
-    };
-    on(stickRoot.node, 'pointerup', release);
-    on(stickRoot.node, 'pointercancel', release);
-    on(window, 'blur', () => release(null));
+  /** Lifted. A short touch that never travelled was a tap on the map after all. */
+  function endStick(ev) {
+    const tap = !stick.engaged && stick.moved <= TAP_SLOP && Date.now() - stick.at <= TAP_MS;
+    releaseStick();
+    if (tap) tapAt(ev);
   }
 
-  function aimStick(ev) {
-    const dx = ev.clientX - stick.cx;
-    // Screen Y grows downward; north grows up.
-    const dy = stick.cy - ev.clientY;
-    const len = Math.hypot(dx, dy);
-    const radius = 44;
-    const k = len > radius ? radius / len : 1;
-    stick.e = (dx * k) / radius;
-    stick.n = (dy * k) / radius;
-    setKnob();
+  /**
+   * A second finger arrived before the first had started walking: the two of
+   * them are a pinch or a pan, so the first one is handed to the gesture code
+   * as though it had been an ordinary touch all along.
+   */
+  function stickToGesture() {
+    touches.set(stick.id, { x: stick.x, y: stick.y, x0: stick.x0, y0: stick.y0, at: stick.at, moved: stick.moved });
+    releaseStick();
   }
 
   /** Live touches on the canvas, for telling a tap from a pan from a pinch. */
@@ -315,6 +388,10 @@ export function makeInput({ canvas, root, camera, bus, EV, onClick, onDoubleClic
   };
 
   on(canvas, 'pointermove', (ev) => {
+    if (ev.pointerId === stick.id) {
+      moveStick(ev);
+      return;
+    }
     if (ev.pointerType === 'touch' && touches.has(ev.pointerId)) {
       const t = touches.get(ev.pointerId);
       t.x = ev.clientX;
@@ -364,6 +441,10 @@ export function makeInput({ canvas, root, camera, bus, EV, onClick, onDoubleClic
   on(canvas, 'pointerdown', (ev) => {
     if (ev.pointerType === 'touch') {
       if (!touchSeen) showStick();
+      // The first finger down, in the lower-left quarter: the stick's, unless
+      // it turns out to be a tap or the start of a pinch.
+      if (touches.size === 0 && startStick(ev)) return;
+      if (stick.id != null && !stick.engaged) stickToGesture();
       touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY, x0: ev.clientX, y0: ev.clientY, at: Date.now(), moved: 0 });
       capture(canvas, ev.pointerId);
       if (touches.size === 2) {
@@ -378,7 +459,22 @@ export function makeInput({ canvas, root, camera, bus, EV, onClick, onDoubleClic
     onClick?.(camera.screenToWorld(p.x, p.y), p, ev);
   });
 
+  /** What a tap does, wherever on the map it landed. */
+  function tapAt(ev) {
+    const p = toCanvas(ev);
+    pointer = { ...p, inside: true };
+    lastWorld = camera.screenToWorld(p.x, p.y);
+    // There is no hover on a touchscreen, so the tap has to do that job too.
+    onHover?.(lastWorld, p);
+    onClick?.(lastWorld, p, ev);
+  }
+
   const endTouch = (ev) => {
+    if (ev.pointerId === stick.id) {
+      if (ev.type === 'pointercancel') releaseStick();
+      else endStick(ev);
+      return;
+    }
     if (ev.pointerType !== 'touch') return;
     const t = touches.get(ev.pointerId);
     touches.delete(ev.pointerId);
@@ -389,17 +485,11 @@ export function makeInput({ canvas, root, camera, bus, EV, onClick, onDoubleClic
     // still fires on pointerdown, unchanged — waiting for the release would put
     // a lag on every click for the sake of a gesture mice do not make.
     const still = Math.hypot(ev.clientX - t.x0, ev.clientY - t.y0) <= TAP_SLOP && t.moved <= TAP_SLOP;
-    if (still && Date.now() - t.at <= TAP_MS && touches.size === 0 && !gesture) {
-      const p = toCanvas(ev);
-      pointer = { ...p, inside: true };
-      lastWorld = camera.screenToWorld(p.x, p.y);
-      // There is no hover on a touchscreen, so the tap has to do that job too.
-      onHover?.(lastWorld, p);
-      onClick?.(lastWorld, p, ev);
-    }
+    if (still && Date.now() - t.at <= TAP_MS && touches.size === 0 && !gesture) tapAt(ev);
   };
   on(canvas, 'pointerup', endTouch);
   on(canvas, 'pointercancel', endTouch);
+  on(window, 'blur', () => releaseStick());
 
   on(canvas, 'dblclick', (ev) => {
     const p = toCanvas(ev);
@@ -458,7 +548,7 @@ export function makeInput({ canvas, root, camera, bus, EV, onClick, onDoubleClic
       // The stick joins the keyboard rather than replacing it, so a tablet with
       // a keyboard attached behaves like both at once and neither has to win.
       let running = run;
-      if (stick.active) {
+      if (stick.engaged) {
         e += stick.e;
         n += stick.n;
         if (Math.hypot(stick.e, stick.n) >= RUN_DEFLECTION) running = true;
@@ -478,13 +568,16 @@ export function makeInput({ canvas, root, camera, bus, EV, onClick, onDoubleClic
     clear() {
       held.clear();
       run = false;
-      stick.active = false;
-      stick.e = 0;
-      stick.n = 0;
-      setKnob();
+      releaseStick();
       touches.clear();
       gesture = null;
     },
+    /**
+     * Re-measure the panels and settle the stick where it waits. Returns where
+     * it may go, or null while there is no stick. `main.js` calls this before
+     * measuring what covers the canvas, so the corner it rests in is counted.
+     */
+    layoutStick,
     destroy() {
       detach.forEach((fn) => fn());
       detach.length = 0;
@@ -492,21 +585,53 @@ export function makeInput({ canvas, root, camera, bus, EV, onClick, onDoubleClic
   };
 }
 
+/** What the stick must never touch: everything a thumb presses. */
+const HARD = '.hud-bar, .toolbar, .field-actions';
+/** What it keeps clear of when there is room: panels read rather than pressed. */
+const SOFT = '.checklist, .toolbar .tool-label, .banner';
+
+/** The visible panels matching `selector`, as plain rectangles. */
+function panels(selector) {
+  const out = [];
+  for (const node of document.querySelectorAll(selector)) {
+    const r = node.getBoundingClientRect();
+    if (!r.width || !r.height) continue;
+    if (Number(getComputedStyle(node).opacity) < 0.05) continue;
+    out.push({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
+  }
+  return out;
+}
+
 /**
- * The thumbstick.
- *
- * A fixed pad rather than one that materialises wherever a thumb lands: the
- * floating kind steals taps from the map, and on this game a tap on the map is
- * how you sight a corner and how you send Ligeirinho somewhere. Bottom-left,
- * because the ≤720 px layout already puts the tool rail bottom-centre.
+ * The thumbstick: an anchor that sits where the stick waits — which is what
+ * `measureSafeArea` measures — and inside it the base, which travels to the
+ * thumb and back. None of it takes a pointer: the canvas underneath keeps
+ * every touch, so taps, double taps and pinches arrive where they always did.
  */
 function makeStick(root) {
   const node = document.createElement('div');
   node.className = 'thumbstick';
   node.setAttribute('aria-hidden', 'true');
+  const base = document.createElement('div');
+  base.className = 'thumbstick-base';
   const knob = document.createElement('div');
   knob.className = 'thumbstick-knob';
-  node.append(knob);
-  root.append(node);
-  return { node, knob };
+  base.append(knob);
+  node.append(base);
+  // `env(safe-area-inset-*)` is readable from CSS only, so it is measured off a
+  // probe padded by it: a notch is an edge the stick must not sit under.
+  const insets = document.createElement('div');
+  insets.className = 'thumbstick-insets';
+  root.append(node, insets);
+  return { node, base, knob, insets };
+}
+
+function safeInsets(probe) {
+  const cs = getComputedStyle(probe);
+  return {
+    top: parseFloat(cs.paddingTop) || 0,
+    right: parseFloat(cs.paddingRight) || 0,
+    bottom: parseFloat(cs.paddingBottom) || 0,
+    left: parseFloat(cs.paddingLeft) || 0,
+  };
 }
