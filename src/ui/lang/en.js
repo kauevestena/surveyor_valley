@@ -479,6 +479,7 @@ export default {
   'save.writeFailed': 'Your progress could not be saved on this device (storage is full or disabled). Keep playing, but consider that this session may not be here next time.',
 
   'hud.sound': 'Sound',
+  'hud.music': 'Music',
 
   'settings.twoFace': 'Two faces',
   'settings.twoFaceHelp':

@@ -1412,6 +1412,8 @@ function nextJob() {
   const remaining = world.parcels.filter((p) => s.parcels?.[p.id]?.status !== 'done');
 
   if (!remaining.length) {
+    // The valley is surveyed: the title theme comes back, as end credits.
+    audio.setScene('title');
     return showCampaignEnd({
       modals,
       state: s,
@@ -1679,6 +1681,8 @@ function begin() {
   }
 
   running = true;
+  // The title theme gives way to the field pieces, whichever way play began.
+  audio.setScene('field');
   tools.reset();
   refreshUI();
   loop.start();
@@ -1764,7 +1768,13 @@ bus.on(EV.TRAVERSE_COMPUTED, (tr) => {
 
 bus.on(EV.SERVICE_FINISHED, () => audio.complete());
 
-bus.on(EV.SERVICE_STARTED, () => audio.begin());
+bus.on(EV.SERVICE_STARTED, () => {
+  audio.begin();
+  // A new property is a new day: the field piece fades and the next comes in.
+  // Not on the job a new game starts with, which `begin()` has already scored —
+  // that one fires before `running` is set.
+  if (running) audio.nextTrack();
+});
 
 // The checklist advancing is the game telling you that you got something right,
 // and it was the one piece of progress feedback with no sound at all.
@@ -1813,6 +1823,28 @@ for (const ev of ['visibilitychange', 'pagehide']) {
 }
 
 // ------------------------------------------------------------------- boot ---
+
+/**
+ * Sound starts on the first touch or key anywhere on the page.
+ *
+ * That used to be the intro's last button, so the title screen — where a
+ * player spends a minute choosing a face and a name — was silent, and the
+ * soundtrack's theme had nowhere to play. Any of these is a real user gesture,
+ * which is all an AudioContext asks for. Several kinds are listened for because
+ * browsers disagree about which ones count: iOS only lets a touch that has
+ * ENDED start the sound, so `touchend` and `click` are here as well as
+ * `pointerdown`. `audio.start()` is idempotent and resumes a context born
+ * suspended, so whichever arrives first and whichever arrives next both help.
+ */
+const UNLOCK_EVENTS = ['pointerdown', 'keydown', 'touchend', 'click'];
+function unlockAudio() {
+  if (!audio.start()) return;
+  if (!running) audio.setScene('title');
+  if (audio.running) {
+    for (const ev of UNLOCK_EVENTS) window.removeEventListener(ev, unlockAudio, { capture: true });
+  }
+}
+for (const ev of UNLOCK_EVENTS) window.addEventListener(ev, unlockAudio, { capture: true, passive: true });
 
 initLanguage();
 applyI18n(document);
@@ -2204,6 +2236,8 @@ window.game = {
       return { e: player.e, n: player.n };
     },
     ready: () => running && atlas.ready,
+    /** What the soundtrack is doing: scene, piece, bar, or how long the quiet has left. */
+    music: () => audio.nowPlaying,
     /** The canvas area the HTML panels are not covering. */
     safeArea: () => ({ ...safeArea }),
   },

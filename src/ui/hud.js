@@ -64,9 +64,41 @@ export function makeHud(root, { onShop, onJobs, onBatch, onToggleSetting, onChec
       {},
       el('button.btn.hud-btn', { type: 'button', 'data-i18n': 'shop.open', onclick: () => onShop?.() }),
       el('button.btn.hud-btn', { type: 'button', 'data-i18n': 'picker.title', onclick: () => onJobs?.() }),
+      musicButton(),
       soundButton(),
     ),
   );
+
+  /**
+   * Music on or off, separately from the sound.
+   *
+   * `audio.setMusic` existed from the start with nothing to call it, which did
+   * not matter while the "music" was a two-note drone. With a soundtrack it
+   * does: a classroom that wants to hear the chimes and footsteps — which carry
+   * information — without four pieces of music over them now has the switch.
+   * The birds go with it, since `audio.js` counts them as part of the score.
+   */
+  function musicButton() {
+    const btn = el('button.btn.hud-btn.hud-sound.hud-music', {
+      type: 'button',
+      'aria-label': t('hud.music'),
+      title: t('hud.music'),
+      'data-i18n-title': 'hud.music',
+      'data-i18n-aria': 'hud.music',
+      onclick: () => {
+        audio?.setMusic(!audio.musicOn);
+        paint();
+      },
+    });
+    const paint = () => {
+      const on = audio ? audio.musicOn : true;
+      btn.textContent = '♫';
+      btn.classList.toggle('is-off', !on);
+      btn.setAttribute('aria-pressed', String(!on));
+    };
+    paint();
+    return btn;
+  }
 
   /**
    * Mute. `audio.setMuted` has persisted under its own key since it was
@@ -78,6 +110,10 @@ export function makeHud(root, { onShop, onJobs, onBatch, onToggleSetting, onChec
       type: 'button',
       'aria-label': t('hud.sound'),
       title: t('hud.sound'),
+      // Re-read on a language switch; set once, they stayed in the language
+      // the game was opened in.
+      'data-i18n-title': 'hud.sound',
+      'data-i18n-aria': 'hud.sound',
       onclick: () => {
         audio?.setMuted(!audio.muted);
         paint();
