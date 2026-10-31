@@ -39,17 +39,67 @@ const SFX_GAIN = 0.85;
  */
 const ROOT_HZ = 220; // A3
 
-/** Soil id -> how a boot sounds on it. */
+/**
+ * How loud a footstep on grass is; every other soil is set relative to it.
+ *
+ * Measured against the soundtrack rather than by ear alone: walking on grass
+ * now sits about 20 dB under the music's loudness at game level (−54 LUFS
+ * against −33), with peaks around −30 dBFS — well under the tunes and the
+ * observation chime, and still plainly there in the quiet between pieces.
+ * Before, footsteps fired four times per footfall (see `footfall` in
+ * `game/player.js`) and the brightest soils sat only 11 to 16 dB under the
+ * music, as a continuous hiss.
+ */
+export const STEP_GAIN = 0.065;
+
+/**
+ * Soil id -> how a boot sounds on it.
+ *
+ * Soft, warm and UNPITCHED, while still telling the soils apart — you should
+ * hear that you have walked onto marsh before you look down. Every band is
+ * broad (Q at most 1.1): the old rock step was a resonant "tock" at Q 3.2, a
+ * note in no key at all, sounding over a soundtrack that is in one. Nothing
+ * is brighter than 2.6 kHz any more, where sand used to hiss at 5.2.
+ *
+ * `gain` is relative to grass; `attack` is slower than the effects' 4 ms so a
+ * step lands as a footfall rather than a click.
+ */
 const FOOTSTEP = {
-  PASTO: { cut: 2400, q: 0.9, gain: 0.055, decay: 0.075 },
-  CAMPO_SUJO: { cut: 3000, q: 0.8, gain: 0.06, decay: 0.09 },
-  SOLO_EXPOSTO: { cut: 1100, q: 1.4, gain: 0.07, decay: 0.055 },
-  LAVOURA: { cut: 900, q: 1.6, gain: 0.075, decay: 0.07 },
-  AREIA: { cut: 5200, q: 0.6, gain: 0.05, decay: 0.11 },
-  ROCHA: { cut: 1800, q: 3.2, gain: 0.08, decay: 0.045 },
-  BREJO: { cut: 700, q: 2.4, gain: 0.09, decay: 0.14 },
-  AGUA: { cut: 800, q: 2.0, gain: 0.09, decay: 0.16 },
+  PASTO: { cut: 1300, q: 0.7, gain: 1, decay: 0.07, attack: 0.008 }, // a soft brush
+  CAMPO_SUJO: { cut: 1700, q: 0.7, gain: 0.92, decay: 0.085, attack: 0.008 }, // a brushier one
+  SOLO_EXPOSTO: { cut: 520, q: 0.8, gain: 1.38, decay: 0.05, attack: 0.006 }, // a dull thud
+  LAVOURA: { cut: 650, q: 0.9, gain: 1.54, decay: 0.065, attack: 0.007 }, // a soft crunch
+  AREIA: { cut: 2600, q: 0.6, gain: 0.48, decay: 0.1, attack: 0.01 }, // a quiet hiss
+  ROCHA: { cut: 1150, q: 1.1, gain: 1.3, decay: 0.04, attack: 0.004 }, // a short tap
+  BREJO: { cut: 380, q: 0.8, gain: 2, decay: 0.13, attack: 0.012 }, // a squelch
+  AGUA: { cut: 450, q: 0.7, gain: 1.6, decay: 0.15, attack: 0.012 }, // a slosh
 };
+
+/**
+ * One footstep's sound, as parameters for `noise()`.
+ *
+ * Two identical footsteps in a row are the most obvious tell in game audio, so
+ * every step is nudged — the band by up to ±7%, the level by up to ±12%. This
+ * used to alternate between two fixed bands a ratio of 0.82 apart, which is a
+ * two-note tick-tock a minor third wide: a tune, and one in no key. A random
+ * nudge of under a semitone varies the step without implying an interval.
+ *
+ * Pure, so `tests/music.test.mjs` can hold the table to its promises.
+ */
+export function stepVoice(soilId, random = Math.random) {
+  const s = FOOTSTEP[soilId] || FOOTSTEP.PASTO;
+  return {
+    type: 'bandpass',
+    cut: s.cut * (0.93 + 0.14 * random()),
+    q: s.q,
+    gain: STEP_GAIN * s.gain * (0.88 + 0.24 * random()),
+    decay: s.decay,
+    attack: s.attack,
+  };
+}
+
+/** The soils a footstep is defined for, so a test can check none is missing. */
+export const FOOTSTEP_SOILS = Object.keys(FOOTSTEP);
 
 export function makeAudio() {
   let ctx = null;
@@ -160,8 +210,23 @@ export function makeAudio() {
     node.gain.linearRampToValueAtTime(value, t + RAMP);
   }
 
+  /**
+   * A gain node that is silent from the moment it exists.
+   *
+   * A fresh gain stands at 1 until its first automation event, and a source
+   * started at a time between two sample frames plays a sliver of a sample
+   * BEFORE that time, which then passes at full level: a one-sample click.
+   * Measured in an offline render, it put footsteps' peaks 17 dB above their
+   * own envelopes. Starting at 0 makes the race harmless.
+   */
+  function silentGain() {
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    return g;
+  }
+
   /** A filtered noise burst: footsteps, thunks, anything percussive. */
-  function noise({ cut = 1500, q = 1, gain = 0.06, decay = 0.08, type = 'bandpass', dest = null }) {
+  function noise({ cut = 1500, q = 1, gain = 0.06, decay = 0.08, attack = 0.004, type = 'bandpass', dest = null }) {
     if (!ok()) return;
     const src = ctx.createBufferSource();
     src.buffer = noiseBuffer;
@@ -172,10 +237,10 @@ export function makeAudio() {
     filt.frequency.value = cut;
     filt.Q.value = q;
 
-    const g = ctx.createGain();
+    const g = silentGain();
     const t = now();
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(gain, t + 0.004);
+    g.gain.linearRampToValueAtTime(gain, t + attack);
     g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
 
     src.connect(filt).connect(g).connect(dest || sfxGain);
@@ -192,7 +257,7 @@ export function makeAudio() {
     osc.frequency.setValueAtTime(freq, t);
     if (bend) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq * bend), t + decay);
 
-    const g = ctx.createGain();
+    const g = silentGain();
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(gain, t + attack);
     g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
@@ -234,8 +299,6 @@ export function makeAudio() {
   }
 
   // ---- the vocabulary -----------------------------------------------------
-
-  let stepPhase = 0;
 
   return {
     start,
@@ -285,14 +348,9 @@ export function makeAudio() {
       rampTo(musicGain, settings.music ? MUSIC_GAIN : 0);
     },
 
-    /**
-     * A footstep on the given soil. Alternating slightly in pitch, because two
-     * identical footsteps in a row is the most obvious tell in game audio.
-     */
+    /** A footstep on the given soil — one per footfall; see `stepVoice`. */
     step(soilId = 'PASTO') {
-      const s = FOOTSTEP[soilId] || FOOTSTEP.PASTO;
-      stepPhase ^= 1;
-      noise({ ...s, cut: s.cut * (stepPhase ? 1 : 0.82) });
+      noise(stepVoice(soilId));
     },
 
     /** A monument driven into the ground. */

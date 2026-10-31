@@ -25,6 +25,8 @@ import { TRACKS, TITLE, FIELD } from '../src/audio/tracks.js';
 import { makeBand, renderPluck, renderString, makeImpulse, RANGE, PLUCK_RATE } from '../src/audio/instruments.js';
 import { makeDirector, makeBag, QUIET, BREATH, FADE, GAP } from '../src/audio/music.js';
 import { mulberry32 } from '../src/core/rng.js';
+import { stepVoice, FOOTSTEP_SOILS, STEP_GAIN } from '../src/audio/audio.js';
+import { SOIL_IDS } from '../src/world/terrain.js';
 
 const PIECES = Object.values(TRACKS);
 const NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -586,4 +588,47 @@ test('nothing is scheduled while the music is off, and it comes back with a fres
   run.advance(1.5);
   assert.equal(run.director.nowPlaying.state, 'playing');
   assert.equal(run.director.nowPlaying.bar, 1);
+});
+
+// ---- footsteps --------------------------------------------------------------------
+
+test('every soil has a footstep, and none of them is a note', () => {
+  // A footstep sounds under the music, so it must not imply a pitch the music
+  // is not in: broad bands only, nothing resonant, nothing bright.
+  assert.deepEqual([...FOOTSTEP_SOILS].sort(), [...SOIL_IDS].sort());
+  for (const soil of SOIL_IDS) {
+    for (let k = 0; k < 50; k++) {
+      const v = stepVoice(soil, mulberry32(k));
+      assert.ok(v.q <= 1.2, `${soil}: Q ${v.q} rings like a note`);
+      assert.ok(v.cut <= 3000, `${soil}: a ${v.cut.toFixed(0)} Hz step is a hiss`);
+      assert.ok(v.gain > 0 && v.gain <= STEP_GAIN * 2.5, `${soil}: gain ${v.gain}`);
+      assert.ok(v.attack >= 0.004 && v.attack < v.decay, `${soil}: attack ${v.attack}`);
+    }
+  }
+});
+
+test('the soils still sound like different ground', () => {
+  // You should hear that you have walked onto marsh before you look down.
+  const mid = (soil) => stepVoice(soil, () => 0.5);
+  for (const wet of ['BREJO', 'AGUA']) {
+    assert.ok(mid(wet).cut < mid('PASTO').cut / 2, `${wet} is not darker than grass`);
+    assert.ok(mid(wet).decay > mid('PASTO').decay * 1.5, `${wet} is not longer than grass`);
+  }
+  assert.ok(mid('AREIA').cut > mid('CAMPO_SUJO').cut, 'sand is the brightest, a hiss');
+  assert.ok(mid('ROCHA').decay < mid('PASTO').decay, 'rock is the shortest, a tap');
+});
+
+test('two footsteps in a row differ, but by less than a semitone', () => {
+  const random = mulberry32(3);
+  let prev = stepVoice('PASTO', random);
+  let differed = 0;
+  for (let i = 0; i < 200; i++) {
+    const v = stepVoice('PASTO', random);
+    if (v.cut !== prev.cut) differed++;
+    // A fixed alternation a minor third apart was a tick-tock tune; a nudge
+    // under a semitone varies the step without implying an interval.
+    assert.ok(Math.abs(12 * Math.log2(v.cut / 1300)) < 1.3, `a step ${v.cut.toFixed(0)} Hz from a 1300 Hz centre`);
+    prev = v;
+  }
+  assert.ok(differed > 190, 'consecutive steps should not repeat');
 });

@@ -15,6 +15,7 @@ import {
   interpolated,
   fastTravel,
   halt,
+  footfall,
   WALK_SPEED,
   RUN_SPEED,
 } from '../src/game/player.js';
@@ -112,6 +113,48 @@ test('a standing player breathes, and a walking one does not', () => {
   assert.equal(p.moving, false);
   assert.equal(p.frame, 0);
   assert.equal(p.walkPhase, 0);
+});
+
+test('a footstep sounds once per footfall, on the frame where the foot comes down', () => {
+  // It used to fire on every half FRAME of the walk cycle — eight sounds to a
+  // cycle that draws two footfalls, 12.5 a second at a walk and 20.5 at a run,
+  // which is not footsteps but a hiss.
+  const world = makeWorld();
+  for (const [run, speed, perSecond] of [
+    [false, WALK_SPEED, 3.6],
+    [true, RUN_SPEED, 5.6],
+  ]) {
+    const p = makePlayer({ e: 10, n: 50 });
+    walk(p, world, { e: 1, n: 0, run }, 0.5);
+    assert.ok(Math.abs(p.speed - speed) < 0.05, 'up to pace before counting');
+    let steps = 0;
+    for (let i = 0; i < Math.round(3 / DT); i++) {
+      const was = p.walkPhase;
+      updatePlayer(p, { e: 1, n: 0, run }, world, DT);
+      if (p.moving && footfall(was, p.walkPhase)) {
+        steps++;
+        // Frames 0 and 2 are the passing pose; a foot lands on 1 and 3.
+        assert.ok(p.frame === 1 || p.frame === 3, `a footstep on frame ${p.frame}`);
+      }
+    }
+    const rate = steps / 3;
+    assert.ok(Math.abs(rate - perSecond) <= 0.4, `${run ? 'running' : 'walking'}: ${rate.toFixed(2)} footsteps a second`);
+  }
+
+  // Standing still is silent, and stopping finishes at most the step under way.
+  const p = makePlayer({ e: 50, n: 50 });
+  walk(p, world, { e: 1, n: 0, run: false }, 1);
+  let after = 0;
+  for (let i = 0; i < Math.round(2 / DT); i++) {
+    const was = p.walkPhase;
+    updatePlayer(p, { e: 0, n: 0, run: false }, world, DT);
+    if (p.moving && footfall(was, p.walkPhase)) after++;
+  }
+  assert.ok(after <= 1, `${after} footsteps after letting go`);
+  assert.equal(footfall(0, 0), false);
+  assert.equal(footfall(0.9, 1.1), true);
+  assert.equal(footfall(1.9, 2.1), false);
+  assert.equal(footfall(3.95, 0.05), false, 'wrapping round the cycle is the passing pose, not a step');
 });
 
 test('the breath rests longer than it peaks', () => {

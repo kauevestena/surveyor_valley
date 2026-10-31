@@ -25,7 +25,7 @@ import { lightAt, LIGEIRINHO_LOOK, ownerLook } from './render/palette.js';
 import { pixi } from './render/pixi.js';
 import { makeAudio } from './audio/audio.js';
 
-import { makePlayer, updatePlayer, interpolated, fastTravel, halt, canStand, nearestStandable } from './game/player.js';
+import { makePlayer, updatePlayer, interpolated, fastTravel, halt, canStand, nearestStandable, footfall } from './game/player.js';
 import {
   makeAssistant,
   updateAssistant,
@@ -389,9 +389,11 @@ const loop = makeLoop({
     store.tickService(dt);
     checkSedeArrival();
 
-    // One footstep per half stride, from the same phase that drives the walk
-    // animation — so what you hear and what you see are the same motion.
-    if (player.moving && Math.floor(player.walkPhase * 2) !== Math.floor(wasPhase * 2)) {
+    // One footstep per footfall, from the same phase that drives the walk
+    // animation — so what you hear and what you see are the same motion. This
+    // used to fire on every half FRAME: four sounds for every foot on screen,
+    // a continuous hiss at a walk and worse at a run.
+    if (player.moving && footfall(wasPhase, player.walkPhase)) {
       audio.step(world.terrain.soilAt(player.e, player.n).id);
     }
 

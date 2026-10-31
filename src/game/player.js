@@ -45,7 +45,15 @@ const STOP_SPEED = 0.06;
 /** How far a slide is nudged off a surface so a tangent does not graze it. */
 const SURFACE_BIAS = 0.003;
 
-/** Ground covered by one full four-frame cycle. */
+/**
+ * Ground covered by one FRAME of the four-frame walk cycle — so a full cycle,
+ * and its two footfalls, is four of these.
+ *
+ * This said "one full four-frame cycle" for a long time, and the footstep
+ * audio believed it: it fired on every half of what it took to be a stride,
+ * which was every half FRAME — eight sounds a cycle against the two footfalls
+ * on screen, 12.5 a second at a walk. See `footfall`.
+ */
 const STRIDE = 0.62;
 /** Walk-cycle phase per second while finishing the last step into a standstill. */
 const SETTLE_RATE = 8;
@@ -61,6 +69,23 @@ const SETTLE_RATE = 8;
  */
 const BREATH_SLOT = 0.8;
 const BREATH_PATTERN = [0, 0, 1];
+
+/**
+ * Did a foot just come down?
+ *
+ * Frames 1 and 3 are the strides — legs apart, a heel striking — and 0 and 2
+ * the passing pose (`render/sprites/character.js`). So a footstep is the walk
+ * cycle ENTERING an odd frame: two a cycle, 3.6 a second at a walk and 5.6 at
+ * a run, each one on the frame where a foot is seen to land.
+ *
+ * @param {number} was    `walkPhase` before this step
+ * @param {number} phase  `walkPhase` after it
+ */
+export function footfall(was, phase) {
+  const before = Math.floor(was) % 4;
+  const after = Math.floor(phase) % 4;
+  return before !== after && after % 2 === 1;
+}
 
 export function makePlayer({ e = 0, n = 0 } = {}) {
   return {
