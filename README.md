@@ -84,7 +84,7 @@ matters in a classroom. For an air-gapped lab, drop the Pixi bundle at
 ## Tests
 
 ```bash
-node --test            # 243 of them, no install, no dependencies
+node --test            # 273 of them, no install, no dependencies
 ```
 
 Node 20 runs ESM and ships a test runner, and everything under `src/core/`, `src/survey/`,
@@ -107,7 +107,7 @@ src/
   ui/               HUD, modals, panels, i18n
 tests/              node --test, DOM-free
 assets/             the logo, in both of its forms
-tools/              the scripts that draw the logo
+tools/              the logo scripts, a sprite contact sheet, and a jukebox for the music
 docs/
   design-notes.md   why it is built this way — the interesting document
   descricao-original.md   the original brief, in Portuguese
@@ -125,6 +125,9 @@ like that, and [`docs/design-notes.md`](docs/design-notes.md) is where it is wri
   and **[Inter](https://rsms.me/inter/)** by Rasmus Andersson, both SIL Open Font License
   1.1. The logo's letterforms are Alfa Slab One converted to outlines — see
   [`tools/make-wordmark.py`](tools/make-wordmark.py); the game's interface is set in Inter.
+- The music: four pieces written for the game and synthesized in the browser as it plays —
+  the score is [`src/audio/tracks.js`](src/audio/tracks.js), and
+  [`tools/jukebox.html`](tools/jukebox.html) plays it on its own.
 - The pixel art, the surveying and everything else: written for a first-year Topografia
   course, by [Kauê de Moraes Vestena](https://github.com/kauevestena).
 

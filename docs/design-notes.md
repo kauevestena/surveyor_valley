@@ -58,7 +58,7 @@ memorial descritivo, without a browser.
 - `tests/offline.test.mjs` — the service worker's precache list matches the files on disk,
   the PixiJS pin, its SRI hash and the cached URL all agree, and a vendored copy of Pixi
   resolves next to the page rather than next to the module that imports it.
-Twenty-six of the eighty modules under `src/` are imported by no test at all — the whole
+Twenty-six of the eighty-five modules under `src/` are imported by no test at all — the whole
 of `ui/`, plus `main.js`, `scene.js`, `overlays.js`, `effects.js` and `audio.js` — because
 they need a DOM. Nothing else stands between them and GitHub Pages: no bundler, no type
 checker, not even a parse. So CI's second job parses every shipped module as ESM, which is
@@ -72,6 +72,14 @@ catch a stray character in `ui/hud.js` shipping a black screen past a green test
   asserts that **the ground is painted where the terrain actually is** — the test whose
   absence let the whole soil map ship mirrored north-for-south inside every chunk, and
   which only works because it is asserted on a chunk whose halves differ.
+- `tests/music.test.mjs` — the soundtrack, which was written as text by somebody who
+  could not hear it, so this file is the ear. Every bar of every piece is a bar long,
+  every note is inside its instrument, and every strong beat of every tune sits with its
+  chord; then every note of every piece is built into a mock Web Audio context that
+  refuses what a browser refuses — a non-finite value, an exponential ramp to zero, a
+  source started and never stopped. The plucked strings are in tune to under three
+  cents, and the director paces it: a piece, quiet, a different piece, and nothing
+  scheduled while the music is off.
 
 ## How it is put together
 
@@ -83,7 +91,8 @@ src/
   world/    terrain field, parcel topology, entities, spatial index, line of sight
   render/   camera, the pixel painter, sprite painters, atlas, ground baking, scene,
             plan view, effects
-  audio/    synthesized ambience and sound effects — no audio files anywhere
+  audio/    the soundtrack, the ambience and the sound effects, all synthesized — no
+            audio files anywhere
   game/     player movement, input, tool gating, tutorial, the service orchestrator,
             the day clock and time limit, the economy
   survey/   units and DMS, azimuths and areas, instrument model, station, resection, traverse
@@ -122,6 +131,11 @@ tests/
   sampled, eyedropped or otherwise derived from another game's art, no such art is
   checked in to derive it from, and any future contribution to `render/sprites/` is held
   to the same line.
+- **The music is written, not recorded, and it is nobody's but ours** — the same line
+  as the art. The farm-sim soundtrack is the acknowledged target: a warm palette of
+  plucks, flute, bells and strings, gentle tempos, a piece and then quiet. Those are
+  conventions. Not one phrase in `audio/tracks.js` is transcribed from another game's
+  score, and a contribution there is held to the same rule as one to `render/sprites/`.
 - **Ground detail is baked, never drawn as entities.** Ten thousand tufts of grass cost
   the same twenty chunk blits as bare dirt. Anything that must move goes in
   `render/effects.js`, which is budgeted at about eighty sprites.
@@ -232,6 +246,67 @@ and a Bowditch or transit compensation — explicitly *not* a rigorous least-squ
 adjustment, and the panel says so. Least squares appears in exactly one place where it
 is warranted and self-contained: the free station, solved as a closed-form 2D Helmert
 fit with no matrix library.
+
+## The soundtrack
+
+Four pieces: **Vale do Agrimensor**, the title theme, on the opening screen and again
+once the last property is done; and three that take turns in the field — **Manhã no
+Campo**, **Toada da Porteira** and **Valsa do Marco**. The accent is the valley's own: a
+viola caipira's doubled strings, a toada in six-eight, and a tune sung the second time
+by two voices a third apart, the way a dupla caipira sings one. All of it is synthesized
+in the browser from the score in `src/audio/tracks.js`.
+
+**The pacing is the farm-sim day's.** A piece plays once, then the valley gets 45 to 75
+seconds to itself — birds, footsteps, a hen — before the next, drawn from a shuffle bag
+so that every piece plays before any repeats and none plays twice running. Forty minutes
+of continuous music over a survey is how a class ends up muting the game. A new job fades
+the current piece and brings in the next. While the sound is muted or the music switched
+off — the ♫ button, which `audio.setMusic` had been waiting for since it was written —
+nothing is scheduled at all.
+
+**Sound starts on the first touch or key anywhere**, which is the intro screen. It used
+to be the intro's last button, so the screen where a player spends a minute choosing a
+face had no music and the title theme had nowhere to play. `audio.start()` is idempotent
+and resumes a context the browser created suspended, which is what iOS needs from the
+touch that comes after the first one.
+
+**The score is text, and the tests are the ear.** A tune is a line of tokens — `F#5q.`
+is a dotted quarter — the harmony is chord symbols, and everything else is the name of a
+pattern played over them: fingerpicking, a toada's rocking arpeggio, a waltz's "pah pah",
+each chord voice-led from the one before by `theory.js#voiceChord`. Nobody who wrote it
+could hear it, so `arrange.js#lint` holds every strong beat of every tune to its chord: a
+chord tone, or a tension that is not a semitone above anything the chord contains. That
+one subtraction is the whole of the avoid-note convention — the fourth over a major chord,
+the root over a maj7 — and before anyone listened it caught the harmonizer landing the
+clarinet on B♭ over B♭maj7 three times. The toada's segunda voz is generated: a third
+below the flute where a third fits, a fourth or a sixth where it does not, which is what
+a second voice does by ear.
+
+**The pitched effects follow the key of the music.** Every chime is built on A3 and moved
+to the tonic of whatever is playing, by at most a tritone (`theory.js#shiftFromA`). Left
+on A, the observation chime's C♯ would land a semitone off the C of the F-major waltz.
+
+**Levels were measured, not guessed.** The parts were balanced on the K-weighted
+loudness of rendered stems — the accompaniment 6 to 8 dB under the tune, the string pad
+11, the shakers 18 — and each piece's `level` brings all four to -15 LUFS at unity,
+within 0.2 dB of each other. The music bus sits where it always did, so a tune peaks just under the
+observation chime. The electric piano's strip starts with a highpass: a 1:1 FM pair puts
+its first lower sideband at exactly 0 Hz, and the first render of the waltz came out with
+a DC offset forty decibels down.
+
+**It costs about eight percent of one slow core while it plays** — measured in headless
+Chromium against a 2.1 GHz server core, over an idle band — and nothing while it is off.
+Plucked strings are Karplus–Strong, rendered once per pitch into a 24 kHz buffer, about a
+millisecond each and made during the quiet before a piece rather than on its first
+downbeat. An allpass supplies the fraction of a sample the delay line cannot, which keeps
+every string within a cent of true — rounded to whole samples, the top of the harp would be
+tens of cents sharp. The string pad and the round bass share one filter per instrument
+rather than one per note, and a note's envelope stops it at -43 dB.
+
+**To listen without walking round the valley**, serve the repository and open
+`tools/jukebox.html`: any piece from any section, any part soloed, or a piece rendered to
+WAV through an OfflineAudioContext — the identical graph the game plays, which is how the
+levels above were measured. Nothing it renders is committed.
 
 ## Status
 
