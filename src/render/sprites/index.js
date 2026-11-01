@@ -14,7 +14,7 @@ import { surveyor } from './character.js';
 import { chicken, cow, pig, pet, ANIMAL_VARIANTS, LIVESTOCK, PETS } from './animals.js';
 import { resolveLook, LIGEIRINHO_LOOK, OWNER_LOOKS, ownerLook } from '../palette.js';
 import { playerMarco, boundaryMark, totalStation, prism, fencePost } from './survey.js';
-import { grassTuft, tussock, flower, pebble, stone, reed, clod, crop } from './ground.js';
+import { grassTuft, tussock, flower, pebble, stone, reed, cattail, lilypad, clod, crop } from './ground.js';
 
 export const TREE_VARIANTS = 8;
 export const BUSH_VARIANTS = 6;
@@ -188,8 +188,12 @@ export function buildGroundSprites() {
     tussock: set('gtus', 5, (rng) => tussock(rng)),
     flower: set('gflw', 8, (rng, i) => flower(rng, i % 4)),
     pebble: set('gpeb', 6, (rng) => pebble(rng)),
-    stone: set('gstn', 6, (rng) => stone(rng)),
+    pebbleGrey: set('gpebG', 6, (rng) => pebble(rng, { grey: true })),
+    stone: set('gstn', 8, (rng, i) => stone(rng, { small: i % 2 === 1 })),
     reed: set('greed', 5, (rng) => reed(rng)),
+    cattail: set('gcat', 5, (rng) => cattail(rng)),
+    // One in four flowering, and a few small leaves among the big ones.
+    lilypad: set('glily', 8, (rng, i) => lilypad(rng, { bloom: i % 4 === 1, small: i % 3 === 2 })),
     clod: set('gclod', 5, (rng) => clod(rng)),
     crop: set('gcrop', 5, (rng) => crop(rng)),
   };

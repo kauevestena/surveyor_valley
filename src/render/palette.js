@@ -36,10 +36,19 @@ export const P = {
 
   soil: ramp('#a8763e', 3),
   soilWet: ramp('#7a5730', 3),
+  // Turned earth: clods, furrows, the cracks in dry ground. Its own ramp with
+  // a small hue rotation, because the shadow steps of `soil` and `soilWet` at
+  // the house default are wine (#642b3c, #391a23): a crack or a furrow painted
+  // with them reads as a purple scribble on brown.
+  earth: ramp('#8a5a32', 3, { hueShift: 0.05, spread: 0.13 }),
   sand: ramp('#dcc98f', 3),
 
   rock: ramp('#96958d', 3),
   rockMoss: ramp('#6f8455', 3),
+  // Loose stones off the rock: a warm grey that shows on earth and on grass
+  // alike, where the soil's own ramp vanished into the one and the rock's went
+  // cold on the other.
+  pebble: ramp('#a39a8a', 3, { hueShift: 0.08, spread: 0.14 }),
 
   /** Kicked-up dirt, and the bright end of a spark. */
   dust: ramp('#cbbfa4', 3),
@@ -287,32 +296,46 @@ export function ownerLook(body, variant = 0) {
  *
  * Two separate vocabularies, and the distinction matters:
  *
- *   `grain`  sprinkled per pixel at low density and DELIBERATELY close in value
- *            to the base. Grain is meant to be felt, not seen. Using the full
+ *   `grain`  sprinkled in small clusters and DELIBERATELY close in value to
+ *            the base. Grain is meant to be felt, not seen. Using the full
  *            three-step ramp here — which the first attempt did — turns a
  *            pasture into television static.
- *   `patch`  larger, lower-frequency mottling that gives a big field some
- *            regional variation instead of one even tone to the horizon.
+ *   `patch`  [dark, light]: larger, lower-frequency mottling — a lusher hollow
+ *            in a pasture, a damp blotch on bare earth, moss on a rock — so a
+ *            big field has some regional variation instead of one even tone to
+ *            the horizon.
+ *
+ * The earth tones take a smaller hue rotation on their grain. At the house
+ * default an orange's shadow step swings toward crimson, and sprinkled over
+ * bare earth that read as purple specks; over sand, as pink ones.
  */
-const grainOf = (base, spread = 0.075) => {
-  const r = ramp(base, 5, { spread, hueShift: 0.15, satBoost: 0.04 });
-  return [r[0], r[4]]; // one step down, one step up — symmetric about the base
+const grainOf = (base, spread = 0.075, hueShift = 0.15) => {
+  const r = ramp(base, 3, { spread, hueShift, satBoost: 0.04 });
+  return [r[0], r[2]]; // `spread` below the base and `spread` above it
 };
 
+/** Ploughed soil: the bare earth, turned and darker for it. */
+const TILLED = '#915f37';
+
 export const GROUND = {
-  PASTO: { base: P.grass[1], grain: grainOf('#5fa03c'), patch: [P.grass[0], P.grassDeep[2]] },
+  // Lush hollows and sunlit rises, both kept close to the grass itself.
+  PASTO: { base: P.grass[1], grain: grainOf('#5fa03c'), patch: [P.leaf[2][1], P.grass[2]] },
   CAMPO_SUJO: { base: P.grassDry[1], grain: grainOf('#8a9a3f'), patch: [P.grassDry[0], P.grass[1]] },
-  SOLO_EXPOSTO: { base: P.soil[1], grain: grainOf('#a8763e'), patch: [P.soil[0], P.soil[2]] },
-  // Furrow tones come from `patch`, and they stay close to the field's own
-  // colour on purpose: high-contrast furrows turn a crop field into corduroy
-  // visible from orbit, which is what the first pass looked like.
-  LAVOURA: { base: P.soil[1], grain: grainOf('#a8763e'), patch: [P.soilWet[2], P.soil[1]] },
-  AREIA: { base: P.sand[1], grain: grainOf('#dcc98f'), patch: [P.sand[0], P.sand[2]] },
-  ROCHA: { base: P.rock[1], grain: grainOf('#96958d'), patch: [P.rock[0], P.rockMoss[0]] },
-  BREJO: { base: P.grassDeep[1], grain: grainOf('#3f7a2c'), patch: [P.grassDeep[0], P.waterDeep[0]] },
-  // Water is a smooth surface, and grain that reads as pleasant texture on
-  // grass reads as television static on it. Tighter tones, and half as often.
-  AGUA: { base: P.water[1], grain: grainOf('#3f92c4', 0.028), grainRate: 0.5, patch: [P.waterDeep[1], P.water[2]] },
+  SOLO_EXPOSTO: { base: P.soil[1], grain: grainOf('#a8763e', 0.07, 0.04), patch: [P.soilWet[1], P.soil[2]], crack: P.earth[0] },
+  // The ridges come from `patch`: trough and crest. Both stay close to the
+  // field's own colour on purpose — high-contrast furrows turn a crop field
+  // into corduroy visible from orbit, which is what the first pass looked like.
+  LAVOURA: { base: TILLED, grain: grainOf(TILLED, 0.06, 0.04), patch: [P.earth[0], P.soil[1]] },
+  // Not `P.sand[0]` for the dark patch: that shadow step is a pink (#c05463),
+  // and mottled through a beach it read as a stain.
+  AREIA: { base: P.sand[1], grain: grainOf('#dcc98f', 0.055, 0.03), patch: [ramp('#dcc98f', 3, { hueShift: 0.03, spread: 0.09 })[0], P.sand[2]] },
+  ROCHA: { base: P.rock[1], grain: grainOf('#96958d'), patch: [P.rock[0], P.rock[2]], moss: P.rockMoss[1], lichen: '#b8b46c' },
+  BREJO: { base: P.grassDeep[1], grain: grainOf('#3f7a2c'), patch: [P.grassDeep[0], P.grass[0]] },
+  // Water takes no grain: grain that reads as pleasant texture on grass reads
+  // as television static on a smooth surface. Its colour is set by depth in
+  // `groundpaint.js` — foam, shallows, deep — and `base` is what a chunk
+  // shows while it bakes.
+  AGUA: { base: P.water[1], grain: grainOf('#3f92c4', 0.028), patch: [P.waterDeep[1], P.water[2]] },
 };
 
 /**
