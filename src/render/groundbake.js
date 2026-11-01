@@ -1,9 +1,9 @@
 // Ground chunks: bitmaps, textures, and a work queue that never blows a frame.
 //
 // A 32 m chunk at 16 px/m is a 512x512 bitmap carrying a couple of thousand
-// individually stamped tufts of grass. Painting one costs 15-30 ms, which is
-// two lost frames if it happens inside `render`. Phase 1 did exactly that and
-// walking into fresh ground stuttered.
+// individually stamped tufts of grass. Painting one costs 35-40 ms, which is
+// two or three lost frames if it happens inside `render`. Phase 1 did exactly
+// that and walking into fresh ground stuttered.
 //
 // So a bake is a state machine that can be stopped mid-way. `pump(budgetMs)`
 // does as much as it can afford and returns; the chunk shows a flat placeholder
@@ -12,7 +12,7 @@
 // resolves first.
 
 import { PX_PER_M } from './pixbuf.js';
-import { classGrid, paintBase, paintDetail, paintFurrows, shadeField, edgeField, detailRows, CLASS_IDS } from './groundpaint.js';
+import { classGrid, groundFields, paintBase, paintDetail, paintFurrows, shadeField, detailRows, CLASS_IDS } from './groundpaint.js';
 import { buildGroundSprites } from './sprites/index.js';
 import { GROUND } from './palette.js';
 import { pixi } from './pixi.js';
@@ -21,7 +21,14 @@ const CHUNK_M = 32;
 const MAX_CHUNKS = 64;
 
 /** Work stages, in order. */
-const STAGE = { GRID: 0, BASE: 1, FURROWS: 2, DETAIL: 3, UPLOAD: 4, DONE: 5 };
+const STAGE = { GRID: 0, FIELDS: 1, BASE: 2, FURROWS: 3, DETAIL: 4, UPLOAD: 5, DONE: 6 };
+
+/**
+ * Output rows per base slice. A slice is the smallest unit of work and always
+ * runs, even when the frame has no budget left, so it has to fit inside one
+ * frame's budget on its own: 32 rows is about a millisecond and a half here.
+ */
+const BASE_ROWS = 32;
 
 export function makeGroundBaker(terrain, { chunkMetres = CHUNK_M, pxPerM = PX_PER_M } = {}) {
   const sprites = buildGroundSprites();
@@ -39,7 +46,7 @@ export function makeGroundBaker(terrain, { chunkMetres = CHUNK_M, pxPerM = PX_PE
     const originE = cx * chunkMetres;
     const originN = cy * chunkMetres;
     // The grid is allocated here but filled in slices, like everything else.
-    const { grid, size: gridSize, cell } = classGrid(terrain, originE, originN, chunkMetres, null, 0, 0);
+    const { grid, size: gridSize } = classGrid(terrain, originE, originN, chunkMetres, null, 0, 0);
     return {
       cx,
       cy,
@@ -47,16 +54,19 @@ export function makeGroundBaker(terrain, { chunkMetres = CHUNK_M, pxPerM = PX_PE
       originN,
       grid,
       gridSize,
-      cell,
-      /** Computed once the grid is complete, then reused by every base slice. */
-      edges: null,
+      /**
+       * The shore, the smooth fields and the rest of what every painter of
+       * this chunk shares: made once the grid is complete, a step at a time,
+       * then read by every slice after.
+       */
+      fields: null,
       shade: shadeField(originE, originN, chunkMetres),
       buf: new Uint8ClampedArray(size * size * 4),
       stage: STAGE.GRID,
       gridRow: 0,
       row: 0,
-      detailRow: -1,
-      detailEnd: detailRows(chunkMetres) - 2,
+      detailRow: 0,
+      detailEnd: detailRows(chunkMetres) - 1,
     };
   }
 
@@ -77,33 +87,42 @@ export function makeGroundBaker(terrain, { chunkMetres = CHUNK_M, pxPerM = PX_PE
           job.gridRow = end;
           if (r.done) {
             // Once, not once per slice: the shore field used to be rebuilt
-            // inside every one of the eleven base slices because `paintBase`
-            // was called without it.
-            job.edges = edgeField(job.grid, job.gridSize, job.cell);
-            job.stage = STAGE.BASE;
+            // inside every base slice because `paintBase` was called without it.
+            job.fields = groundFields(
+              job.grid, job.gridSize, job.originE, job.originN, chunkMetres,
+              null, job.shade, { deferred: true },
+            );
+            job.stage = STAGE.FIELDS;
           }
           break;
         }
+        case STAGE.FIELDS: {
+          // A field at a time: all of them at once is several milliseconds.
+          const step = job.fields.work.shift();
+          if (step) step();
+          if (!job.fields.work.length) job.stage = STAGE.BASE;
+          break;
+        }
         case STAGE.BASE: {
-          const end = Math.min(size, job.row + 48);
+          const end = Math.min(size, job.row + BASE_ROWS);
           paintBase(
             job.buf, job.grid, job.gridSize, job.originE, job.originN,
-            chunkMetres, pxPerM, job.row, end, job.shade, job.edges,
+            chunkMetres, pxPerM, job.row, end, job.shade, null, job.fields,
           );
           job.row = end;
           if (job.row >= size) job.stage = STAGE.FURROWS;
           break;
         }
         case STAGE.FURROWS: {
-          paintFurrows(job.buf, job.grid, job.gridSize, job.originE, job.originN, chunkMetres, pxPerM, sprites);
+          paintFurrows(job.buf, job.grid, job.gridSize, job.originE, job.originN, chunkMetres, pxPerM, sprites, job.fields);
           job.stage = STAGE.DETAIL;
           break;
         }
         case STAGE.DETAIL: {
-          const end = Math.min(job.detailEnd, job.detailRow + 10);
+          const end = Math.min(job.detailEnd, job.detailRow + 9);
           paintDetail(
             job.buf, job.grid, job.gridSize, job.originE, job.originN,
-            chunkMetres, pxPerM, sprites, job.detailRow, end,
+            chunkMetres, pxPerM, sprites, job.detailRow, end, job.fields,
           );
           job.detailRow = end + 1;
           if (job.detailRow > job.detailEnd) job.stage = STAGE.UPLOAD;

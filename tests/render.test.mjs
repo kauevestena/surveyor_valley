@@ -14,8 +14,19 @@ import { ANIMAL_VARIANTS, PETS, LIVESTOCK } from '../src/render/sprites/animals.
 import { building, BUILDING_VARIANTS, BUILDING_OVERHANG, buildingSortNorthing } from '../src/render/sprites/built.js';
 import { makeRng } from '../src/core/rng.js';
 import { makeHerd, SPECIES, STOCK } from '../src/game/animals.js';
-import { SKIN_TONES, HAIR_TONES, HAT_STYLES, OWNER_LOOKS, resolveLook } from '../src/render/palette.js';
-import { classGrid, paintBase, paintDetail, shadeField, GRASS_COVER } from '../src/render/groundpaint.js';
+import { P, SKIN_TONES, HAIR_TONES, HAT_STYLES, OWNER_LOOKS, resolveLook } from '../src/render/palette.js';
+import {
+  classGrid,
+  groundFields,
+  groundSample,
+  paintBase,
+  paintDetail,
+  paintFurrows,
+  shadeField,
+  detailRows,
+  clumpAt,
+  GRASS_COVER,
+} from '../src/render/groundpaint.js';
 import { makeTerrain, SOIL_IDS } from '../src/world/terrain.js';
 import { buildWorld } from '../src/world/world.js';
 import { DIFFICULTY } from '../src/core/state.js';
@@ -878,6 +889,234 @@ test('the ground actually has texture rather than being a flat fill', () => {
   // this guards against — anything under a few dozen tones is a flat fill.
   assert.ok(seen.size > 40, `expected a textured surface, got ${seen.size} distinct colours`);
   assert.equal(buf[3], 255, 'the ground must be fully opaque — no holes in the world');
+});
+
+/**
+ * One chunk, baked the way `groundbake.js` bakes it: grid, fields, base,
+ * crops, detail. `paper` pre-fills the bitmap and skips the base, so what the
+ * detail pass stamps can be told apart from the ground under it.
+ */
+function bakeChunk(terrain, oe, on, sprites, { M = 32, paper = null } = {}) {
+  const W = M * PX_PER_M;
+  const { grid, size } = classGrid(terrain, oe, on, M);
+  const F = groundFields(grid, size, oe, on, M);
+  const buf = new Uint8ClampedArray(W * W * 4);
+  if (paper) {
+    for (let i = 0; i < buf.length; i += 4) buf.set(paper, i);
+  } else {
+    paintBase(buf, grid, size, oe, on, M, PX_PER_M, 0, W, F.shade, null, F);
+    paintFurrows(buf, grid, size, oe, on, M, PX_PER_M, sprites, F);
+  }
+  paintDetail(buf, grid, size, oe, on, M, PX_PER_M, sprites, 0, detailRows(M) - 1, F);
+  return { buf, F, W };
+}
+
+test('the ground belongs to the world: two chunks paint their overlap identically', () => {
+  // The strongest form of "no seams". The ground used to be painted in
+  // chunk-local coordinates, which gave every chunk the same grain, mirrored
+  // its brightness north to south (an 11% jump at every other border), and
+  // gave the two halves of a tuft standing on a border to two different
+  // tufts. If a pixel's colour depends on its place in the world and on
+  // nothing else — not on which chunk happened to paint it — none of that
+  // can happen. So paint two chunks that overlap, and compare.
+  const terrain = makeTerrain('render-test', BOUNDS);
+  const sprites = buildGroundSprites();
+  // Six soils and a pond: borders, shore, crops and detail all in the overlap.
+  const a = bakeChunk(terrain, 256, 256, sprites);
+  // Half a chunk east and a quarter north of it.
+  const b = bakeChunk(terrain, 272, 264, sprites);
+  const W = a.W;
+
+  let differ = 0;
+  let total = 0;
+  for (let py = 0; py < 384; py++) {
+    for (let px = 256; px < W; px++) {
+      const oa = (py * W + px) * 4;
+      const ob = ((py + 128) * W + (px - 256)) * 4;
+      total++;
+      if (a.buf[oa] !== b.buf[ob] || a.buf[oa + 1] !== b.buf[ob + 1] || a.buf[oa + 2] !== b.buf[ob + 2]) differ++;
+    }
+  }
+  assert.equal(differ, 0, `${differ} of ${total} pixels of the overlap came out differently from the two chunks`);
+});
+
+test('the texture does not repeat from one chunk to the next', () => {
+  // A valley of nothing but pasture, so that the texture is the only thing
+  // that can differ between two chunks of it.
+  const flat = { soilAt: () => ({ id: 'PASTO' }) };
+  const sprites = buildGroundSprites();
+  const a = bakeChunk(flat, 0, 0, sprites);
+  const b = bakeChunk(flat, 96, 160, sprites);
+  const W = a.W;
+
+  // The fine structure — grain, tufts, pebbles — as luminance minus a local
+  // average. Two chunks wearing the same pattern correlate near 1 however the
+  // light falls on each; independent ones near 0.
+  const highPass = (buf) => {
+    const L = new Float32Array(W * W);
+    for (let i = 0; i < W * W; i++) L[i] = buf[i * 4] * 0.3 + buf[i * 4 + 1] * 0.59 + buf[i * 4 + 2] * 0.11;
+    const h = new Float32Array(W * W);
+    for (let y = 2; y < W - 2; y++) {
+      for (let x = 2; x < W - 2; x++) {
+        let sum = 0;
+        for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) sum += L[(y + dy) * W + x + dx];
+        h[y * W + x] = L[y * W + x] - sum / 25;
+      }
+    }
+    return h;
+  };
+  const ha = highPass(a.buf);
+  const hb = highPass(b.buf);
+  let ab = 0;
+  let aa = 0;
+  let bb = 0;
+  for (let i = 0; i < ha.length; i++) {
+    ab += ha[i] * hb[i];
+    aa += ha[i] * ha[i];
+    bb += hb[i] * hb[i];
+  }
+  const r = ab / Math.sqrt(aa * bb);
+  assert.ok(Math.abs(r) < 0.15, `two distant chunks of pasture share their texture (correlation ${r.toFixed(2)})`);
+});
+
+test('borders between soils are soft and organic: no flips, no hard steps, no smears', () => {
+  const terrain = makeTerrain('render-test', BOUNDS);
+  const M = 32;
+  const step = 1 / PX_PER_M;
+  let worst = 0;
+  const widths = [];
+  for (const [oe, on] of [[224, 0], [256, 256], [64, 0]]) {
+    const { grid, size } = classGrid(terrain, oe, on, M);
+    const F = groundFields(grid, size, oe, on, M);
+    for (let n = on + 0.5; n < on + M; n += 1.5) {
+      let prev = null;
+      let blended = 0;
+      for (let e = oe; e < oe + M; e += step) {
+        const s = groundSample(F, e, n);
+        // Land only: water meets the land at a line, on purpose.
+        if (s.shore < 0.3) {
+          prev = null;
+          blended = 0;
+          continue;
+        }
+        if (prev) {
+          // Pixel to pixel, no soil's share of the blend may jump.
+          for (const id of new Set([...Object.keys(s.weights), ...Object.keys(prev.weights)])) {
+            worst = Math.max(worst, Math.abs((s.weights[id] ?? 0) - (prev.weights[id] ?? 0)));
+          }
+          // Count the run of blended pixels around each change of soil.
+          if (s.cls !== prev.cls) {
+            let run = blended;
+            let k = e;
+            while (k < oe + M) {
+              k += step;
+              const t = groundSample(F, k, n);
+              if (Math.max(...Object.values(t.weights)) > 0.9 || t.shore < 0.3) break;
+              run++;
+            }
+            widths.push(run);
+          }
+        }
+        blended = Math.max(...Object.values(s.weights)) > 0.9 ? 0 : blended + 1;
+        prev = s;
+      }
+    }
+  }
+  assert.ok(widths.length > 20, `expected plenty of borders to measure, found ${widths.length}`);
+  // A flip is a jump of 1. The blend itself moves at most about a quarter per
+  // pixel, and the border's wander can squeeze it to two thirds of its width
+  // in places — so 0.45, which no flip, and no step carrying half a border,
+  // gets under.
+  assert.ok(worst < 0.45, `a soil's share of the blend jumped by ${worst.toFixed(2)} between neighbouring pixels`);
+  widths.sort((x, y) => x - y);
+  const median = widths[widths.length >> 1];
+  // Under three pixels is a hard edge; over a metre is a smear.
+  assert.ok(median >= 3 && median <= 16, `a border blends over ${median} px at the median`);
+});
+
+test('patches of reeds, stones and flowers have organic outlines, not square ones', () => {
+  // Clumping used to come from a hash per 7 m square, and the reed beds and
+  // stone heaps came out with straight edges on a grid. A smooth field has
+  // no steps anywhere.
+  let maxStep = 0;
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (let e = 0; e < 80; e += 0.01) {
+    const v = clumpAt(e, 13.37);
+    maxStep = Math.max(maxStep, Math.abs(clumpAt(e + 0.01, 13.37) - v));
+    lo = Math.min(lo, v);
+    hi = Math.max(hi, v);
+  }
+  assert.ok(maxStep < 0.03, `the patch field stepped by ${maxStep.toFixed(3)} over a centimetre`);
+  // And it does make patches: in places well above the threshold, in places well below.
+  assert.ok(hi > 0.4 && lo < 0, `the patch field only spans ${lo.toFixed(2)}..${hi.toFixed(2)}`);
+});
+
+test('lily pads float on open water, clear of the bank', () => {
+  const terrain = makeTerrain('render-test', BOUNDS);
+  const sprites = buildGroundSprites();
+  // The detail pass alone, on magenta paper: every pixel that is not magenta
+  // was stamped, and the lily pad's leaf greens are its own.
+  const { buf, F, W } = bakeChunk(terrain, 544, 416, sprites, { paper: [255, 0, 255, 255] });
+  const leaf = new Set(P.leaf[1].map((hex) => rgba(hex).slice(0, 3).join(',')));
+
+  let pads = 0;
+  let worst = -Infinity;
+  for (let py = 0; py < W; py++) {
+    for (let px = 0; px < W; px++) {
+      const o = (py * W + px) * 4;
+      if (!leaf.has(`${buf[o]},${buf[o + 1]},${buf[o + 2]}`)) continue;
+      pads++;
+      const s = groundSample(F, 544 + (px + 0.5) / PX_PER_M, 416 + 32 - (py + 0.5) / PX_PER_M);
+      worst = Math.max(worst, s.shore);
+    }
+  }
+  assert.ok(pads > 100, `expected lily pads on this lake, found ${pads} pixels of them`);
+  // Placed 0.8 m or more out, and a leaf is under 0.3 m across.
+  assert.ok(worst < -0.45, `a lily pad reaches to ${worst.toFixed(2)} m from the water's edge`);
+});
+
+test('marsh pools are murky, never lake-blue', () => {
+  // The painted-water test above finds water by its blue. A puddle in the
+  // reeds is not open water — the surveyor can wade it — and must not read
+  // as, or be counted as, the lake.
+  const terrain = makeTerrain('render-test', BOUNDS);
+  const sprites = buildGroundSprites();
+  let marsh = 0;
+  let blue = 0;
+  for (const [oe, on] of [[96, 192], [448, 32]]) {
+    const { buf, F, W } = bakeChunk(terrain, oe, on, sprites);
+    for (let py = 0; py < W; py += 2) {
+      for (let px = 0; px < W; px += 2) {
+        const s = groundSample(F, oe + (px + 0.5) / PX_PER_M, on + 32 - (py + 0.5) / PX_PER_M);
+        if (s.cls !== 'BREJO' || s.shore < 0.3) continue;
+        marsh++;
+        const o = (py * W + px) * 4;
+        if (buf[o + 2] > buf[o] + 8 && buf[o + 2] > buf[o + 1] + 8) blue++;
+      }
+    }
+  }
+  assert.ok(marsh > 5000, `expected marsh to look at, found ${marsh} samples`);
+  assert.equal(blue, 0, `${blue} of ${marsh} marsh pixels are painted lake-blue`);
+});
+
+test("a chunk's fields can be prepared a step at a time, and paint the same", () => {
+  // The baker spreads the fields over frames with `deferred`; it must not
+  // change a pixel.
+  const terrain = makeTerrain('render-test', BOUNDS);
+  const M = 32;
+  const W = M * PX_PER_M;
+  const { grid, size } = classGrid(terrain, 256, 256, M);
+  const whole = groundFields(grid, size, 256, 256, M);
+  const stepped = groundFields(grid, size, 256, 256, M, null, null, { deferred: true });
+  assert.ok(stepped.work.length >= 4, 'deferred fields come as several steps');
+  while (stepped.work.length) stepped.work.shift()();
+
+  const a = new Uint8ClampedArray(W * W * 4);
+  const b = new Uint8ClampedArray(W * W * 4);
+  paintBase(a, grid, size, 256, 256, M, PX_PER_M, 0, W, whole.shade, null, whole);
+  paintBase(b, grid, size, 256, 256, M, PX_PER_M, 0, W, stepped.shade, null, stepped);
+  assert.deepEqual(Buffer.from(b), Buffer.from(a));
 });
 
 test('hash2 is stable, well spread, and independent across salts', () => {
