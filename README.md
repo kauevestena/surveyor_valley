@@ -84,7 +84,7 @@ matters in a classroom. For an air-gapped lab, drop the Pixi bundle at
 ## Tests
 
 ```bash
-node --test            # 285 of them, no install, no dependencies
+node --test            # 292 of them, no install, no dependencies
 ```
 
 Node 20 runs ESM and ships a test runner, and everything under `src/core/`, `src/survey/`,
@@ -107,7 +107,8 @@ src/
   ui/               HUD, modals, panels, i18n
 tests/              node --test, DOM-free
 assets/             the logo, in both of its forms
-tools/              the logo scripts, a sprite contact sheet, and a jukebox for the music
+tools/              the logo scripts, contact sheets of the sprites and of the ground,
+                    and a jukebox for the music
 docs/
   design-notes.md   why it is built this way — the interesting document
   descricao-original.md   the original brief, in Portuguese

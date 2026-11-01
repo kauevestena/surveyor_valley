@@ -72,7 +72,11 @@ catch a stray character in `ui/hud.js` shipping a black screen past a green test
   the pixel grid. All DOM-free, because a sprite is a plain `{w, h, data}`. It also
   asserts that **the ground is painted where the terrain actually is** — the test whose
   absence let the whole soil map ship mirrored north-for-south inside every chunk, and
-  which only works because it is asserted on a chunk whose halves differ.
+  which only works because it is asserted on a chunk whose halves differ — and that
+  **two chunks that overlap paint the overlap identically**, which is what "no seams"
+  means once it is stated exactly. The rest of the ground is held there too: no texture
+  repeats from chunk to chunk, borders blend without flips, patches have no straight
+  edges, lily pads keep off the bank, and a marsh puddle is never painted lake-blue.
 - `tests/music.test.mjs` — the soundtrack, which was written as text by somebody who
   could not hear it, so this file is the ear. Every bar of every piece is a bar long,
   every note is inside its instrument, and every strong beat of every tune sits with its
@@ -145,8 +149,8 @@ tests/
 - **Ground detail is baked, never drawn as entities.** Ten thousand tufts of grass cost
   the same twenty chunk blits as bare dirt. Anything that must move goes in
   `render/effects.js`, which is budgeted at about eighty sprites.
-- **Chunk baking is sliced and time-budgeted.** A chunk costs 15–30 ms; `pump()` spends
-  at most 4 ms per frame on it. Never make the bake atomic — that was the original
+- **Chunk baking is sliced and time-budgeted.** A chunk costs 35–40 ms; `pump()` spends
+  at most 4 ms per frame on it, and no single slice comes near that. Never make the bake atomic — that was the original
   stutter, and every stage including the soil classification is sliced for the same
   reason.
 - **Soil is classified at 4 samples per metre and the painters index that grid, not
@@ -329,6 +333,71 @@ used to sit 11 to 16 dB under it; `STEP_GAIN` in `audio.js` is the one knob.
 `tools/jukebox.html`: any piece from any section, any part soloed, or a piece rendered to
 WAV through an OfflineAudioContext — the identical graph the game plays, which is how the
 levels above were measured. Nothing it renders is committed.
+
+## The ground
+
+Eight soils — pasture, campo sujo, bare earth, ploughed field, sand, rock, marsh and
+water — painted into 32 m chunks at 16 pixels a metre by `render/groundpaint.js`. None
+of it is an image file.
+
+**Everything is anchored to the world, never to the chunk.** Every hash and every smooth
+field is read at a world position: the grain, the tufts, the brightness, the wander of a
+border. It used to be chunk-local, and three defects came from that one choice. The
+brightness field was mirrored north–south inside each chunk, so the ground jumped by up
+to 11% at every north–south chunk border; the grain repeated exactly every 32 m; and a
+tuft standing on a border was half of one tuft in this chunk and half of a different one
+in the next. The test is the strongest statement there is: two overlapping chunks paint
+their overlap identically, pixel for pixel. The old painter disagreed with itself on
+95.6% of that overlap, and two distant chunks of pasture correlated at 0.99 in their fine
+texture; they now correlate at zero.
+
+**Borders are a soft, organic blend.** Each pixel moves its own position by a smooth warp
+of up to a third of a metre, so an outline meanders; weighs the 3×3 soil cells around
+that point with a quadratic B-spline; and mixes the textured colour of every soil
+present, each share roughened by up to 20% so that a border is a band of ground rather
+than an airbrushed gradient. It replaced a nearest-cell lookup jittered per pixel, which
+turned every border into a fringe of confetti. Measured on the test valley, a border
+blends over 5 pixels at the median, 3 to 15 between the tenth and ninetieth percentiles.
+Water is the exception, on purpose: it meets the land at a line, decided by a signed
+distance from the shore, with a two-pixel lip of foam, shallows only a little lighter
+than open water — any paler and a pond too small to have a middle reads as ice — deep
+water from three metres out, and a damp bank on the land side.
+
+**Each soil has a pattern of its own**, over a shared mottle and a grain that comes in
+crumbs of two or three pixels rather than single dead ones: hairline cracks in dry earth
+and none in damp; a lit crest and a dark trough along every furrow of a ploughed field,
+with the crops planted on the crests; wind ripples on sand; rock in slabs, a shade apart,
+with moss and lichen and a fissure between some slabs and not others — a crack between
+every pair is crazy paving, which is what the first attempt looked like; and murky pools
+in the marsh, greener than the lake on purpose, with duckweed at their edges.
+
+**The earth tones take a small hue rotation.** At the house default the shadow step of
+an orange swings toward crimson, which shades a sprite well and paints ground badly: the
+cracks and furrows came out wine-coloured, bare earth had purple specks and sand a pink
+blotch. `P.earth`, and the reduced rotation on each soil's grain, are the fix.
+
+**Detail grows in patches**, from a smooth field rather than a hash per 7 m square, which
+gave reed beds and stone heaps straight edges on a grid. Cattails and lily pads have
+patches of their own: on the reeds' field a cattail could only ever grow inside a reed
+bed, where the reeds take every spot first. Lily pads float 0.8 to 3 m out, never
+against the bank, and some of them flower.
+
+**It costs about one and a half times what the flat ground did**, and none of it shows
+as a stutter. Per 32 m chunk in headless Chromium on the development machine: 36 to 40 ms,
+against 21 to 23 for the old painter; in Node, 36 against 27. Most of it is the base paint
+at about 90 ns a pixel, and that took work: the four smooth fields a pixel reads — the
+warp east and north, the mottle, the brightness — are interpolated a row at a time, eight
+pixels to a lattice cell and an add apiece; a pixel is written as one 32-bit word; the
+grain takes one hash per 2×2 block; the fields for one soil only (cracks, pools) fill in
+lazily where that soil asks; and a chunk's fields are prepared in steps of about half a
+millisecond. Every unit of work fits well inside the 4 ms the baker may spend in a frame —
+frame times while walking measured identical before and after. What does show is the nine
+chunks baked behind the intro screen: about a third of a second instead of a fifth.
+
+**To look at it without walking round the valley**, run `node tools/ground-preview.mjs`:
+every soil, then the borders between pairs of them, cropped from real chunks of real
+valleys baked by the game's own painters, with where each one came from printed so it
+can be walked to in the game.
 
 ## Status
 
