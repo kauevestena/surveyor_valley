@@ -491,4 +491,205 @@ export default {
   'caderneta.colHzPI': 'Hz face II',
   'caderneta.twoCHelp': '2c = FI − (FII − 180°). Twice the instrument\'s collimation error.',
   'pay.overtime': 'Overtime ({minutes} min, {mult})',
+
+  // ---- Behind the error: the hidden panel (type "erro", or the faint σ) ----
+  'theory.title': 'Behind the error',
+  'theory.open': 'Behind the error: how error propagates',
+  'theory.lead':
+    'Where every error in this game comes from, how it travels to the area, and the formulas that do the arithmetic. It is first-course surveying theory, with the exact numbers the game uses.',
+
+  'theory.path.title': '1 · How error travels in this game',
+  'theory.path.p1':
+    'Every monument has two positions: the true one, where it physically sits in the valley, and the surveyed one, which is what you measured. You only ever see the surveyed one. Error is not sprinkled on at the end: it is born in every reading and travels through the same arithmetic you would do by hand.',
+  'theory.path.o1':
+    'Setup. Occupying a monument draws the tripod’s centring error (in E and in N, once per occupation), and the backsight reading carries a pointing error and the centring of the backsight target. That gives the orientation constant θ₀, computed from the coordinates you BELIEVE the station and the backsight have.',
+  'theory.path.o2':
+    'Sight. Each point draws the pole or prism centring, a direction error (instrument precision + pointing) and a distance error (a mm + b ppm). Collimation c rides identically on every Face I reading. The reading is generated from the TRUE geometry.',
+  'theory.path.o3':
+    'Reduction. Az = Hz + θ₀, E = E₀ + d·sin Az and N = N₀ + d·cos Az, always from the station’s surveyed coordinates. So the station’s error and θ₀’s error pass whole into every point radiated from it.',
+  'theory.path.o4':
+    'Network. A measured monument gets radiated coordinates and can become the next station, carrying its error with it. Along a chain of radiations the errors pile up.',
+  'theory.path.o5':
+    'Traverse. The angles (the difference of two readings from one occupation) and the distances between stations give the angular and linear misclosures. Compensation spreads the angular error equally and the linear one by Bowditch or Transit, correcting the stations.',
+  'theory.path.o6':
+    'Re-radiation. From the compensated stations θ₀ is recomputed and every sight is reduced again. A corner sighted more than once takes the mean of its reductions.',
+  'theory.path.o7':
+    'Delivery. The ring of corners gives the area (shoelace) and the perimeter. Only at the debrief are they compared with the truth, after the datum’s arbitrary translation is removed.',
+  'theory.path.n1': 'Every draw comes from a seeded generator: the same seed replays exactly the same measurements.',
+
+  'theory.kinds.title': '2 · Kinds of error',
+  'theory.kinds.p1':
+    'Blunders: a transposed digit, the wrong point. They follow no statistics and are caught only by checks: misclosure, residuals, the free station’s scale.',
+  'theory.kinds.p2':
+    'Systematic: the same sign and size under the same conditions. In this game it is collimation c. Repeating does not help; they are removed by procedure (two faces) or calibration.',
+  'theory.kinds.p3':
+    'Random: small, of unpredictable sign, normally distributed. Here they are centring, direction (pointing) and distance. Each one is a single draw:',
+  'theory.kinds.f1': 'x = x_true + σ·z        z ~ N(0, 1)',
+  'theory.kinds.p4':
+    'The standard deviation σ measures the spread: about 68 % of errors fall within ±1σ, 95 % within ±2σ and 99.7 % within ±3σ. That is why tolerances are written as 2σ or 3σ.',
+  'theory.kinds.n1':
+    'Precision (small spread) is not accuracy (closeness to the truth): a systematic error leaves measurements very precise and still wrong.',
+
+  'theory.law.title': '3 · The law of propagation of variances',
+  'theory.law.p1': 'If a result y is computed from independent measurements, y = f(x₁, …, xₙ), its standard deviation is:',
+  'theory.law.f1': 'σ_y² = (∂f/∂x₁)²·σ₁² + (∂f/∂x₂)²·σ₂² + … + (∂f/∂xₙ)²·σₙ²',
+  'theory.law.p2':
+    'Each partial derivative says how much y moves when xᵢ moves a little: it is the weight of that error in the result. Cases that come up all the time:',
+  'theory.law.l1': 'Sum or difference, y = x₁ ± x₂: σ_y = √(σ₁² + σ₂²). Independent errors add in quadrature, never linearly.',
+  'theory.law.l2': 'Scaling by a constant, y = k·x: σ_y = |k|·σ.',
+  'theory.law.l3': 'Mean of k measurements: σ_mean = σ/√k. Four times the readings for half the error.',
+  'theory.law.l4': 'An angle is the difference of two directions: σ_β = √2·σ_dir.',
+  'theory.law.p3': 'In matrix form, with the Jacobian J (the partial derivatives) and the variance-covariance matrix Σ of the measurements:',
+  'theory.law.f2': 'Σ_yy = J · Σ_xx · Jᵀ',
+  'theory.law.n1':
+    'The law is first order (it linearises f near the measured value) and, in its simple form, assumes independent measurements. When two results depend on the same error, covariances appear, and that is what a course in adjustment of observations is about.',
+  'theory.law.n2': 'Angles enter the formulas in radians. To convert from seconds, divide by ρ" = 206 265".',
+
+  'theory.instrument.title': '4 · The instrument model',
+  'theory.instrument.p1': 'Four error sources, kept apart on purpose. The first three are random.',
+  'theory.instrument.p2':
+    'Direction: the total station’s nominal precision (10", 5", 3" or 1"), added in quadrature to a pointing error that grows on short sights.',
+  'theory.instrument.f1': 'σ_dir(d) = √(σ_TS² + σ_p²)        σ_p = min(6"·2 m / max(d, 2 m), 30")',
+  'theory.instrument.p3': 'Distance: the classic a mm + b ppm, also in quadrature.',
+  'theory.instrument.f2': 'σ_d = √(a² + (b·10⁻⁶·d)²)',
+  'theory.instrument.p4':
+    'Centring: the tripod stands off the monument by an offset drawn in E and in N (σ_i, once per occupation), and the pole or prism by another (σ_t, on every sight). In coordinates that is σ millimetres at any distance; seen as an angle, centring is huge on short sights.',
+  'theory.instrument.f3': 'ε" = ρ"·σ_c / d        e.g. 2.5 mm at 20 m → 26"   ·   at 200 m → 2.6"',
+  'theory.instrument.p5':
+    'Collimation (systematic): a fixed misalignment c of the line of sight. Face I reads c high; Face II, with the telescope turned through 180°, reads c low. The mean of the two faces cancels c, and their difference shows how far out the instrument is.',
+  'theory.instrument.f4': 'FI = Hz + c        FII = Hz + 180° − c\nHz = (FI + (FII − 180°)) / 2        2c = FI − (FII − 180°)',
+  'theory.instrument.n1':
+    'Two faces also average two readings, so the direction noise falls by √2. Centring does not improve: the pole is in the same place for both readings.',
+  'theory.instrument.n2':
+    'A detail of the model: in this game the orientation reading on the backsight carries no collimation, but every foresight carries +c. On one face, then, the angle between two foresights from the same station (the traverse angles) cancels c, while every radiated azimuth turns by c, moving the corner d·c/ρ" sideways (22" at 50 m ≈ 5 mm). On a real instrument with near-level sights, c also affects the backsight and largely cancels; the real effect is c/sin z, which grows on steep sights.',
+
+  'theory.radial.title': '5 · Radial survey: from angle to coordinate',
+  'theory.radial.p1': 'Every point is computed from the station and two measurements.',
+  'theory.radial.f1': 'Az = Hz + θ₀        E = E₀ + d·sin Az        N = N₀ + d·cos Az',
+  'theory.radial.p2': 'The partial derivatives (Az in radians) and the propagation law give:',
+  'theory.radial.f2': '∂E/∂d = sin Az     ∂E/∂Az = d·cos Az     ∂N/∂d = cos Az     ∂N/∂Az = −d·sin Az',
+  'theory.radial.f3': 'σ_E² = σ_E₀² + sin²Az·σ_d² + d²·cos²Az·σ_Az²\nσ_N² = σ_N₀² + cos²Az·σ_d² + d²·sin²Az·σ_Az²',
+  'theory.radial.p3':
+    'It is clearer with the axes turned onto the line of sight: along it the error is the EDM’s; across it, it is the distance times the angular error. The error ellipse stretches whichever way is worse.',
+  'theory.radial.f4': 'σ_L = σ_d        σ_T = d·σ_Az / ρ"        σ_P = √(σ_E₀² + σ_N₀² + σ_L² + σ_T²)',
+  'theory.radial.p4':
+    'The azimuth error has two parts: the reading to the point and the orientation θ₀ = Az_bs − Hz_bs. The orientation comes from one backsight, and its error turns EVERY point of that setup.',
+  'theory.radial.f5': 'σ_Az² = σ_dir(d)² + σ_θ₀²        σ_θ₀² ≈ σ_dir(d_bs)² + ρ"²·(σ_i² + σ_t²) / d_bs²',
+  'theory.radial.p5':
+    'That is why a short backsight is so bad: centring seen at 10 m becomes a large angular error, which each point then multiplies by its own distance. A point 100 m away, oriented on a backsight 10 m away, inherits about ten times the centring as a sideways error.',
+  'theory.radial.n1':
+    'All together, one sight gives σ_P² ≈ 2σ_i² + 2σ_t² + σ_d² + (d·σ_dir/ρ")² + (d·σ_θ₀/ρ")², plus the station’s own error. Centring counts twice because it moves the point in E and in N.',
+
+  'theory.repeat.title': '6 · Repeating sights: what averaging fixes',
+  'theory.repeat.p1':
+    'A corner sighted k times takes the mean of its reductions, and the mean only shrinks what is drawn afresh on every sight.',
+  'theory.repeat.l1': 'Averages away (÷√k): direction noise, distance noise, pole or prism centring.',
+  'theory.repeat.l2':
+    'Does not, if the sights come from the same occupation: tripod centring, the θ₀ orientation error, single-face collimation, the station’s coordinate error.',
+  'theory.repeat.f1': 'σ_P(k)² ≈ σ_fixed² + σ_random² / k',
+  'theory.repeat.p2':
+    'Shrinking the fixed part takes a change of procedure: sight the point from another station, use a longer backsight, buy a better tripod, or observe on two faces against collimation.',
+
+  'theory.traverse.title': '7 · Closed traverse',
+  'theory.traverse.p1':
+    'A station’s angle is the difference of two readings (backsight and foresight) from the SAME occupation. Its standard deviation holds both directions and the centrings:',
+  'theory.traverse.f1': 'σ_β² = σ_dir(d₁)² + σ_dir(d₂)²\n     + (ρ"·σ_i·c / (d₁·d₂))²\n     + (ρ"·σ_t)²·(1/d₁² + 1/d₂²)',
+  'theory.traverse.n1':
+    'd₁ and d₂ are the distances to the neighbouring stations and c is the distance between them. The tripod term vanishes when both neighbours lie in the same direction and is largest when they are opposite.',
+  'theory.traverse.p2': 'Angular misclosure: the theoretical sum is (n − 2)·180° for interior angles and (n + 2)·180° for exterior ones.',
+  'theory.traverse.f2': 'e_α = Σβ − (n ∓ 2)·180°        T = 2·√2·σ_TS·√n        correction per station = −e_α / n',
+  'theory.traverse.n2':
+    'The game’s tolerance T uses only the instrument’s nominal precision (σ_TS), with no centring. On short legs centring dominates: see "Your numbers right now" for the tolerance predicted with it.',
+  'theory.traverse.p3':
+    'Azimuth propagation: each azimuth inherits the one before, so before closure the error grows like a random walk.',
+  'theory.traverse.f3': 'Azᵢ = Azᵢ₋₁ + 180° + βᵢ  (mod 360°)        σ_Az,k ≈ σ_β·√k',
+  'theory.traverse.p4': 'Linear misclosure and relative precision:',
+  'theory.traverse.f4': 'e_E = ΣΔE     e_N = ΣΔN     e = √(e_E² + e_N²)     precision = 1 : (ΣD / e)',
+  'theory.traverse.p5':
+    'The expected linear misclosure, after the angular misclosure has been spread equally (rᵢ is the distance from station i to the centroid of the stations):',
+  'theory.traverse.f5': 'E[e²] = Σ σ_dᵢ² + Σ (σ_βᵢ / ρ")²·rᵢ²',
+  'theory.traverse.n3':
+    'Why the centroid: an angle error at station i turns the rest of the traverse about i. Equal distribution subtracts the mean error from every station, and what is left is the same as turning about the centroid. The game’s tests check this formula by simulation.',
+  'theory.traverse.p6': 'Linear compensation: each leg takes a share of the error, with the opposite sign.',
+  'theory.traverse.f6': 'Bowditch:  δEᵢ = −e_E·Dᵢ / ΣD          δNᵢ = −e_N·Dᵢ / ΣD\nTransit:   δEᵢ = −e_E·|ΔEᵢ| / Σ|ΔE|    δNᵢ = −e_N·|ΔNᵢ| / Σ|ΔN|',
+  'theory.traverse.n4':
+    'Relative precision gets worse on smaller properties: centring and the EDM constant do not shrink with the figure, but the perimeter does.',
+  'theory.traverse.n5':
+    'Bowditch assumes angles and distances of comparable precision; Transit, angles better than distances. Neither is a rigorous adjustment.',
+
+  'theory.free.title': '8 · Free station (least squares)',
+  'theory.free.p1':
+    'With no monument under the instrument, the polar sights to known points are already coordinates in a frame of their own, x = d·sin Hz and y = d·cos Hz. A similarity transform (2D Helmert) is fitted:',
+  'theory.free.f1': 'E = E_S + a·x + b·y        N = N_S − b·x + a·y        a = s·cos θ,  b = s·sin θ',
+  'theory.free.p2': 'With both clouds centred (′ = minus the mean), the least-squares solution comes out in closed form:',
+  'theory.free.f2': 'a = Σ(x′E′ + y′N′) / Σ(x′² + y′²)        b = Σ(y′E′ − x′N′) / Σ(x′² + y′²)\nE_S = Ē − a·x̄ − b·ȳ        N_S = N̄ + b·x̄ − a·ȳ',
+  'theory.free.f3': 'v = fitted − known        rms = √(Σv² / (2n − 4))        scale = (s − 1)·10⁶ ppm',
+  'theory.free.n1':
+    'There are 2n equations (E and N of each point) for 4 unknowns (E_S, N_S, θ, s): with 2 points the solution is exact; with 3 or more there is redundancy to estimate the error. A scale far from 1 almost always means a misrecorded distance, and points all in one sector leave the position weak across that sector.',
+
+  'theory.area.title': '9 · Area',
+  'theory.area.f1': 'A = ½·Σ (Eᵢ·Nᵢ₊₁ − Eᵢ₊₁·Nᵢ)',
+  'theory.area.f2': '∂A/∂Eᵢ = ½·(Nᵢ₊₁ − Nᵢ₋₁)        ∂A/∂Nᵢ = ½·(Eᵢ₋₁ − Eᵢ₊₁)',
+  'theory.area.f3': 'σ_A = ½·√( Σ σᵢ²·|Pᵢ₊₁ − Pᵢ₋₁|² )',
+  'theory.area.p1':
+    'Each corner weighs in proportion to the diagonal between its two neighbours. The same error at the tip of a narrow spike barely moves the area; at a corner that opens the figure out, it moves it a lot.',
+  'theory.area.n1':
+    'σᵢ is corner i’s per-axis standard deviation. The formula assumes independent corners; corners radiated from the same station share errors, and it cannot see that.',
+
+  'theory.debrief.title': '10 · The debrief',
+  'theory.debrief.p1':
+    'Only at the debrief does the truth appear. Area, perimeter and side RMS do not depend on the coordinate frame. The error at each corner needs the two frames aligned, and they differ by a translation only (arbitrary origin, map north):',
+  'theory.debrief.f1': 'ΔE_datum = mean(E − E_true)        ΔN_datum = mean(N − N_true)        (over the control monuments)',
+  'theory.debrief.f2': 'errorᵢ = √((Eᵢ − ΔE_datum − Eᵢ,true)² + (Nᵢ − ΔN_datum − Nᵢ,true)²)        RMS = √(Σ errorᵢ² / n)',
+  'theory.debrief.p2':
+    'The translation is fitted on the control monuments, not on the corners, so a corner’s own error cannot hide inside it.',
+  'theory.debrief.n1':
+    'What the game does NOT model: a rigorous least-squares adjustment of the traverse, correlations between observations, refraction, earth curvature and heights.',
+
+  'theory.live.title': '11 · Your numbers right now',
+  'theory.live.p1':
+    'Predictions from the kit you are carrying and from your own measurements. Nothing here uses where the monuments truly are.',
+  'theory.live.noKit': 'Start a game to see the numbers for your kit.',
+  'theory.live.kitTitle': 'Kit',
+  'theory.live.instrument': 'Total station',
+  'theory.live.tripod': 'Tripod',
+  'theory.live.target': 'Target',
+  'theory.live.collimation': 'Collimation',
+  'theory.live.twoFace': 'Two faces on',
+  'theory.live.tableTitle': 'One sight, by distance',
+  'theory.live.colD': 'd',
+  'theory.live.colDir': 'σ_dir',
+  'theory.live.colCentring': 'centring',
+  'theory.live.colDist': 'σ_d',
+  'theory.live.colTrans': 'σ_T (direction)',
+  'theory.live.colPoint': 'σ_P, backsight at the same distance',
+  'theory.live.colPointShort': 'σ_P, backsight at 10 m',
+  'theory.live.colCollimation': 'collimation (systematic)',
+  'theory.live.tableNote':
+    'Centring in seconds is the tripod’s and the target’s together, seen from that distance. σ_P is the radial error of a radiated point, without the station’s own error. Collimation is a fixed offset, not a σ, and two faces remove it.',
+  'theory.live.traverseTitle': 'Your last traverse',
+  'theory.live.noTraverse': 'No traverse has been computed yet. Open the computations once the ring of stations is closed.',
+  'theory.live.eAng': 'Angular misclosure',
+  'theory.live.tolGame': 'Game tolerance (σ_TS only)',
+  'theory.live.tolPredicted': 'Predicted tolerance (2σ, centring in)',
+  'theory.live.eLin': 'Linear misclosure',
+  'theory.live.eLinExpected': 'Expected linear misclosure √E[e²]',
+  'theory.live.relObserved': 'Precision achieved',
+  'theory.live.relExpected': 'Precision expected',
+  'theory.live.relRequired': 'Precision required',
+  'theory.live.eLinSplit': 'Of the expected linear misclosure, {angles} m comes from the angles and {distances} m from the distances (added in quadrature).',
+  'theory.live.colStation': 'Station',
+  'theory.live.colBetaDir': 'directions',
+  'theory.live.colBetaTripod': 'tripod',
+  'theory.live.colBetaPrism': 'target',
+  'theory.live.traverseNote':
+    'An error within ±2σ is what the kit normally gives. Outside the game’s tolerance but inside the predicted one: the instrument met its specification and centring did the rest. Outside both: look for a blunder.',
+  'theory.live.areaTitle': 'Area',
+  'theory.live.noRing': 'The area’s uncertainty appears once every corner of the property has been sighted.',
+  'theory.live.area': 'Surveyed area',
+  'theory.live.sigmaArea': 'σ of the area',
+  'theory.live.sigmaAreaPct': 'relative σ',
+  'theory.live.worstCorner': 'Least certain corner',
+  'theory.live.areaNote':
+    'Each corner uses its own sights: the random part falls by √k, the fixed part does not. It is a conservative estimate and leaves out the stations’ own error.',
 };

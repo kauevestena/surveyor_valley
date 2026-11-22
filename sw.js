@@ -30,7 +30,7 @@
 // for — drawing them forever, because the background refresh it relies on can
 // never complete.
 
-const CACHE_VERSION = 'sv-v15';
+const CACHE_VERSION = 'sv-v16';
 const PIXI_URL = 'https://cdn.jsdelivr.net/npm/pixi.js@8.19.0/dist/pixi.min.mjs';
 
 /**
@@ -106,6 +106,7 @@ const CORE = [
   './src/report/errorfigure.js',
   './src/report/planta.js',
   './src/report/reportview.js',
+  './src/survey/budget.js',
   './src/survey/geometry.js',
   './src/survey/instrument.js',
   './src/survey/network.js',
@@ -129,6 +130,7 @@ const CORE = [
   './src/ui/parcelpicker.js',
   './src/ui/shop.js',
   './src/ui/stationdialog.js',
+  './src/ui/theory.js',
   './src/ui/toolbar.js',
   './src/world/entities.js',
   './src/world/los.js',

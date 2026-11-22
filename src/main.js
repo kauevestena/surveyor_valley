@@ -52,6 +52,7 @@ import { makeHud } from './ui/hud.js';
 import { makeToolbar } from './ui/toolbar.js';
 import { renderCaderneta, cadernetaRows } from './ui/caderneta.js';
 import { renderCalculos } from './ui/calculos.js';
+import { renderTheory, watchSecretCode } from './ui/theory.js';
 import { showStationDialog } from './ui/stationdialog.js';
 import { showParcelPicker, showCampaignEnd } from './ui/parcelpicker.js';
 import { showShop } from './ui/shop.js';
@@ -66,6 +67,8 @@ import { drawListToCanvas, docBlocksToHtml, renderDebrief } from './report/repor
 import { exportPDF, printFallback, downloadText, downloadCSV } from './report/pdf.js';
 
 import { areaOf } from './survey/geometry.js';
+import { resolveKit } from './survey/instrument.js';
+import { ringSigmas } from './survey/budget.js';
 import { num } from './ui/i18n.js';
 import { fmtDuration } from './survey/units.js';
 
@@ -1145,6 +1148,7 @@ function openCalculos() {
         store.setSetting('compRule', rule);
         dialog.setBody(render());
       },
+      onTheory: openTheory,
     });
   };
 
@@ -1153,6 +1157,50 @@ function openCalculos() {
     wide: true,
     body: render(),
     actions: [{ labelKey: 'common.close' }],
+  });
+}
+
+/**
+ * "Bastidores do erro", the hidden theory panel. Opened by typing `erro`, or by
+ * the faint σ in the cálculos and the debrief — see `ui/theory.js`.
+ *
+ * Reads, never runs: the traverse is the one the cálculos last computed, not a
+ * fresh `runTraverse()`, because that rewrites the network and re-radiates the
+ * detail, which is not something opening a reference page should do. And it
+ * takes nothing true from the world: predictions need the kit and the
+ * geometry the player surveyed, and the truth stays in the debrief.
+ */
+let theoryDialog = null;
+function openTheory() {
+  if (theoryDialog) return;
+  const s = store.get();
+  const svc = s.activeService;
+  const parcel = svc && world ? world.parcelById.get(svc.parcelId) : null;
+  const kit = s.inventory ? resolveKit(s.inventory) : null;
+  const ring = svc ? service.surveyedRing() : [];
+
+  const live = kit
+    ? {
+        kit,
+        twoFace: Boolean(s.settings?.twoFace),
+        traverse: svc?.traverse ?? null,
+        requiredPrecision: store.difficulty().requiredPrecision,
+        ring,
+        ringSigmas:
+          parcel && ring.length >= 3
+            ? ringSigmas({ markIds: parcel.markIds, observations: svc.observations, setups: svc.setups, kit })
+            : null,
+      }
+    : null;
+
+  theoryDialog = modals.open({
+    titleKey: 'theory.title',
+    wide: true,
+    body: renderTheory(live),
+    actions: [{ labelKey: 'common.close' }],
+    onClose: () => {
+      theoryDialog = null;
+    },
   });
 }
 
@@ -1212,7 +1260,7 @@ function openDelivery() {
   const body = el(
     'div.delivery',
     {},
-    renderDebrief(result),
+    renderDebrief(result, { onTheory: openTheory }),
     errorCanvas ? el('h3', { text: t('debrief.figureTitle') }) : null,
     errorCanvas,
     el('h3', { text: t('delivery.planta') }),
@@ -1848,6 +1896,8 @@ for (const ev of UNLOCK_EVENTS) window.addEventListener(ev, unlockAudio, { captu
 
 initLanguage();
 applyI18n(document);
+// The hidden theory panel answers to a typed word from the very first screen.
+watchSecretCode(openTheory);
 // Before the intro paints. The face-and-difficulty screen is as full of
 // buttons as the game is, and it is the first thing a phone player touches.
 applyTouchMode();

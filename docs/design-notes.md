@@ -207,6 +207,20 @@ tests/
   and what is left is the error the player earned. The error plot is built by
   `report/errorfigure.js` and is deliberately NOT part of the planta: the planta is the
   deliverable and imitates a legal instrument.
+- **There is a hidden panel, "Bastidores do erro", and it never reads the truth.** Typing
+  `erro` anywhere opens it (four keys within 4 s of each other; none of the four does
+  anything else), and so does a faint σ beside the "not rigorous" notice in the cálculos and
+  beside the per-corner heading in the debrief. It is not on the rail or the intro's controls
+  page on purpose: it is a reference for whoever goes looking. It holds the theory — the
+  path the error takes through this game, the law of propagation of variances, the
+  instrument model as coded, radiation, the traverse, the free station, the area — and a
+  live box that runs the player's own kit and survey through `survey/budget.js`. That box
+  shows predictions and the player's own misclosures only, so the panel can be opened in the
+  middle of a job without breaking the rule above. It reads `activeService.traverse` rather
+  than calling `runTraverse()`, because running the traverse rewrites the network. Every
+  formula it prints is checked by simulation in `tests/budget.test.mjs`, most of them against
+  the game's own observation model. Over 71 real starter-kit surveys the predicted σ of the
+  angular misclosure came within 7% of the observed RMS, and the linear one within 10%.
 - **The overlay canvas is UNDER the HTML panels**, so anything pinned to an edge can be
   drawn behind one and be, for the player, simply absent. `main.js#measureSafeArea` reports
   what the panels cover and every edge marker clamps inside it. Each panel owns exactly ONE

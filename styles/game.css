@@ -910,6 +910,133 @@
   font-family: var(--mono);
 }
 
+/* ------------------------------------------------- bastidores do erro - */
+/* The hidden theory panel (`ui/theory.js`): typed `erro`, or the faint σ. */
+
+.theory-section {
+  margin-bottom: 0.7rem;
+  border: 2px solid var(--line-strong);
+  background: var(--panel-alt);
+  border-radius: var(--radius-sm);
+}
+
+.theory-section > summary {
+  cursor: pointer;
+  padding: 0.55rem 0.85rem;
+  font-weight: 750;
+  font-size: 0.92rem;
+  color: var(--ink);
+  list-style-position: inside;
+}
+
+.theory-section[open] > summary {
+  border-bottom: 2px solid var(--line-strong);
+}
+
+.theory-body {
+  padding: 0.7rem 0.95rem 0.4rem;
+  font-size: 0.89rem;
+  line-height: 1.5;
+}
+
+.theory-body > p,
+.theory-list {
+  margin: 0 0 0.65rem;
+}
+
+.theory-list {
+  padding-left: 1.3rem;
+}
+
+.theory-list li {
+  margin-bottom: 0.35rem;
+}
+
+/* Several formulas are written on two or three lines, aligned by spaces. */
+.theory-formula {
+  margin: 0 0 0.65rem;
+  overflow-x: auto;
+  color: var(--ink);
+}
+
+/* Equations wrap BETWEEN each other, never inside one; one that is still too
+   wide for a phone scrolls inside its box instead. */
+.formula-eq {
+  display: inline-block;
+  white-space: pre;
+  margin-right: 2.6em;
+}
+
+.formula-eq:last-child {
+  margin-right: 0;
+}
+
+.formula-lead {
+  white-space: pre;
+}
+
+.theory-h {
+  margin: 1rem 0 0.4rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+}
+
+.theory-table {
+  overflow-x: auto;
+  margin-bottom: 0.5rem;
+}
+
+/* The game's labels and table heads are set in capitals, and capitals are
+   wrong in a page of formulas: σ turns into Σ — a SUM — and 10 m into 10 M. */
+.theory .stat-label,
+.theory .tbl th {
+  text-transform: none;
+}
+
+.theory-table .tbl td {
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+
+/* The way in from the cálculos and the debrief. Deliberately easy to miss:
+   faint until a pointer or the keyboard finds it. */
+.theory-peek {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-left: 0.45rem;
+  padding: 0;
+  vertical-align: middle;
+  font: italic 700 0.95rem/1 Georgia, "Times New Roman", serif;
+  /* It sits inside a heading in the debrief; a capital Σ would mean a sum. */
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-faint);
+  background: transparent;
+  border: 1px dotted transparent;
+  border-radius: 50%;
+  opacity: 0.4;
+  cursor: help;
+  transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+
+.theory-peek:hover,
+.theory-peek:focus-visible {
+  opacity: 1;
+  color: var(--accent-dark);
+  border-color: var(--line-strong);
+}
+
+html.is-touch .theory-peek {
+  width: 2.2rem;
+  height: 2.2rem;
+  opacity: 0.55;
+}
+
 /* ----------------------------------------------------------- parcel list - */
 
 .parcel-list {
