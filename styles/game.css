@@ -420,6 +420,20 @@
   color: var(--ink-soft);
 }
 
+/* Narrow screens: the longest key label ("Alavanca (canto inferior esquerdo)")
+   would take the whole width of a max-content column and squeeze every
+   description into a sliver, so each key sits above its description. */
+@media (max-width: 560px) {
+  .controls {
+    grid-template-columns: 1fr;
+    gap: 0.15rem 0;
+  }
+
+  .controls dd {
+    margin-bottom: 0.45rem;
+  }
+}
+
 .intro-choices {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
@@ -1573,5 +1587,91 @@ html.is-touch .checklist {
     max-height: calc(100dvh - 16rem);
     overflow-y: auto;
     overscroll-behavior: contain;
+  }
+}
+
+/* ---- phone: keep the HUD buttons reachable, let wide tables scroll ------- */
+/*
+   The status fields scroll sideways inside `.hud-scroll`; Store, Jobs and the
+   sound switches used to scroll away with them and now sit outside it, pinned
+   to the right edge. `display: contents` off-touch leaves a desktop untouched.
+*/
+.hud-scroll {
+  display: contents;
+}
+
+html.is-touch .hud-bar {
+  overflow: visible;
+}
+
+html.is-touch .hud-scroll {
+  display: flex;
+  align-items: center;
+  gap: inherit;
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+html.is-touch .hud-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+html.is-touch .hud-scroll > * {
+  flex: none;
+}
+
+html.is-touch .hud-actions {
+  flex: none;
+}
+
+/*
+   On a phone the four buttons alone are as wide as the screen, so they get a
+   row of their own, right-aligned, above the scrolling status fields.
+*/
+@media (max-width: 720px) {
+  html.is-touch .hud-bar {
+    flex-wrap: wrap;
+    row-gap: 0.35rem;
+  }
+
+  html.is-touch .hud-actions {
+    order: -1;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    margin-left: 0;
+  }
+
+  html.is-touch .hud-scroll {
+    flex: 1 1 100%;
+  }
+}
+
+/* Narrow phones: trim the buttons' side padding so all four share one row. */
+@media (max-width: 420px) {
+  html.is-touch .hud-actions {
+    flex-wrap: nowrap;
+    gap: 0.3rem;
+  }
+
+  html.is-touch .hud-actions .hud-btn {
+    padding-left: 0.45rem;
+    padding-right: 0.45rem;
+    min-width: 2.75rem;
+  }
+}
+
+/*
+   Wide tables (the field book has ten columns) scroll inside the dialog
+   instead of pushing it past the screen edge.
+*/
+@media (max-width: 720px) {
+  html.is-touch .modal .tbl {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 }
