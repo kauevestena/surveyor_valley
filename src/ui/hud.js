@@ -32,33 +32,39 @@ export function makeHud(root, { onShop, onJobs, onBatch, onToggleSetting, onChec
   const bar = el(
     'div.hud-bar',
     {},
-    // The wordmark carries the name, so the name is its `alt` rather than a
-    // second copy of it beside the picture: a screen reader announcing
-    // "Surveyor Valley Surveyor Valley" is what a decorative logo plus a label
-    // gets you. `data-i18n-alt` keeps it translated on a language switch.
+    // The read-only fields scroll sideways on a phone; the buttons stay put.
+    // `display: contents` on a desktop, so the bar lays out exactly as before.
     el(
-      'div.hud-brand',
+      'div.hud-scroll',
       {},
-      el('img.hud-logo', {
-        src: './assets/logo-pixel.png',
-        alt: t('app.title'),
-        'data-i18n-alt': 'app.title',
-        width: '89',
-        height: '9',
-      }),
+      // The wordmark carries the name, so the name is its `alt` rather than a
+      // second copy of it beside the picture: a screen reader announcing
+      // "Surveyor Valley Surveyor Valley" is what a decorative logo plus a label
+      // gets you. `data-i18n-alt` keeps it translated on a language switch.
+      el(
+        'div.hud-brand',
+        {},
+        el('img.hud-logo', {
+          src: './assets/logo-pixel.png',
+          alt: t('app.title'),
+          'data-i18n-alt': 'app.title',
+          width: '89',
+          height: '9',
+        }),
+      ),
+      field('hud.property', 'hud-property'),
+      el(
+        'div.hud-clock',
+        {},
+        el('span.hud-clock-face', { id: 'hud-clock' }),
+        el('span.hud-clock-sub', { id: 'hud-elapsed' }),
+      ),
+      el('div.hud-purse', {}, el('span.hud-coin', { text: '●' }), el('span.hud-money', { id: 'hud-money' })),
+      field('hud.station', 'hud-station'),
+      field('hud.progress', 'hud-progress'),
+      field('hud.marcos', 'hud-marcos'),
+      field('hud.instrument', 'hud-instrument'),
     ),
-    field('hud.property', 'hud-property'),
-    el(
-      'div.hud-clock',
-      {},
-      el('span.hud-clock-face', { id: 'hud-clock' }),
-      el('span.hud-clock-sub', { id: 'hud-elapsed' }),
-    ),
-    el('div.hud-purse', {}, el('span.hud-coin', { text: '●' }), el('span.hud-money', { id: 'hud-money' })),
-    field('hud.station', 'hud-station'),
-    field('hud.progress', 'hud-progress'),
-    field('hud.marcos', 'hud-marcos'),
-    field('hud.instrument', 'hud-instrument'),
     el(
       'div.hud-actions',
       {},

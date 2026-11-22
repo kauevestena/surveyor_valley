@@ -30,7 +30,7 @@
 // for — drawing them forever, because the background refresh it relies on can
 // never complete.
 
-const CACHE_VERSION = 'sv-v14';
+const CACHE_VERSION = 'sv-v15';
 const PIXI_URL = 'https://cdn.jsdelivr.net/npm/pixi.js@8.19.0/dist/pixi.min.mjs';
 
 /**
