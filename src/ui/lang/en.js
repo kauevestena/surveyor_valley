@@ -272,6 +272,8 @@ export default {
   'calc.angularTheoretical': 'Σ theoretical',
   'calc.angularTolerance': 'Tolerance',
   'calc.angularCorrection': 'Correction per station',
+  'calc.toleranceNote':
+    'The tolerance is 2σ of the closure: the directions and the centring of tripod and target at each station, on the legs you measured. The instrument alone would give ±{nominal}".',
   'calc.interior': 'interior angles, (n−2)·180°',
   'calc.exterior': 'exterior angles, (n+2)·180°',
   'calc.linearClosure': 'Linear misclosure',
@@ -445,7 +447,7 @@ export default {
   // ---- shop ----------------------------------------------------------------
   'shop.title': 'Equipment store',
   'shop.intro':
-    'A better instrument means a tighter closure — and a better-paid job. The tolerance beside each one is what the computation panel will hold you to.',
+    'Better kit means a tighter closure — and a better-paid job. The tolerance beside each item is what the computation panel would hold you to on a typical traverse, with the rest of your kit. On short legs the tripod and the target count for more than the total station.',
   'shop.instruments': 'Total stations',
   'shop.tripods': 'Tripods',
   'shop.targets': 'Targets',
@@ -453,7 +455,7 @@ export default {
   'shop.marcoPack': 'Pack of {n} monuments',
   'shop.marcoHave': 'You have {n} in the truck',
   'shop.owned': 'In use',
-  'shop.tolerance': 'angular tolerance ±{sec}" on a 5-station traverse',
+  'shop.tolerance': 'angular tolerance ±{sec}" on a 5-station traverse with {leg} m legs',
   'shop.centring': 'centring error σ = {mm} mm',
   'shop.open': 'Store',
 
@@ -483,13 +485,14 @@ export default {
 
   'settings.twoFace': 'Two faces',
   'settings.twoFaceHelp':
-    'Observe on both telescope faces. Their mean cancels the collimation error, which is systematic and never averages out however many readings you take on one face.',
+    'Observe on both telescope faces: the mean cancels collimation in each reading, cuts the noise by √2 and shows 2c. The backsight is read on the faces active at setup; switching mid-station mixes faces and brings collimation back.',
   'settings.dms': 'DMS',
   'settings.gon': 'gon',
   'settings.gonHelp': 'Switch between degrees/minutes/seconds and gons (400 gon = 360°).',
   'caderneta.colHzPD': 'Hz face I',
   'caderneta.colHzPI': 'Hz face II',
   'caderneta.twoCHelp': '2c = FI − (FII − 180°). Twice the instrument\'s collimation error.',
+  'caderneta.reTwoFace': 'backsight on FI/FII',
   'pay.overtime': 'Overtime ({minutes} min, {mult})',
 
   // ---- Behind the error: the hidden panel (type "erro", or the faint σ) ----
@@ -502,7 +505,7 @@ export default {
   'theory.path.p1':
     'Every monument has two positions: the true one, where it physically sits in the valley, and the surveyed one, which is what you measured. You only ever see the surveyed one. Error is not sprinkled on at the end: it is born in every reading and travels through the same arithmetic you would do by hand.',
   'theory.path.o1':
-    'Setup. Occupying a monument draws the tripod’s centring error (in E and in N, once per occupation), and the backsight reading carries a pointing error and the centring of the backsight target. That gives the orientation constant θ₀, computed from the coordinates you BELIEVE the station and the backsight have.',
+    'Setup. Occupying a monument draws the tripod’s centring error (in E and in N, once per occupation). The backsight is read like any sight: pointing, the backsight target’s centring and collimation, on the faces (Face I, or both) chosen at setup. That gives the orientation constant θ₀, computed from the coordinates you BELIEVE the station and the backsight have.',
   'theory.path.o2':
     'Sight. Each point draws the pole or prism centring, a direction error (instrument precision + pointing) and a distance error (a mm + b ppm). Collimation c rides identically on every Face I reading. The reading is generated from the TRUE geometry.',
   'theory.path.o3':
@@ -561,7 +564,7 @@ export default {
   'theory.instrument.n1':
     'Two faces also average two readings, so the direction noise falls by √2. Centring does not improve: the pole is in the same place for both readings.',
   'theory.instrument.n2':
-    'A detail of the model: in this game the orientation reading on the backsight carries no collimation, but every foresight carries +c. On one face, then, the angle between two foresights from the same station (the traverse angles) cancels c, while every radiated azimuth turns by c, moving the corner d·c/ρ" sideways (22" at 50 m ≈ 5 mm). On a real instrument with near-level sights, c also affects the backsight and largely cancels; the real effect is c/sin z, which grows on steep sights.',
+    'Where collimation goes: the backsight is read with it too, so on the level sights of a planimetric survey c cancels between the backsight and the foresights whenever both are read on the same faces. It comes back when you mix them: the backsight on Face I only and the foresights on both (or the other way round) turns every radiated azimuth by c, moving the corner d·c/ρ" sideways (22" at 50 m ≈ 5 mm). The backsight is read on the faces active at setup. On a real instrument the effect is c/sin z: on steep sights it does not cancel, and that is the underlying reason to observe on both faces.',
 
   'theory.radial.title': '5 · Radial survey: from angle to coordinate',
   'theory.radial.p1': 'Every point is computed from the station and two measurements.',
@@ -573,7 +576,7 @@ export default {
     'It is clearer with the axes turned onto the line of sight: along it the error is the EDM’s; across it, it is the distance times the angular error. The error ellipse stretches whichever way is worse.',
   'theory.radial.f4': 'σ_L = σ_d        σ_T = d·σ_Az / ρ"        σ_P = √(σ_E₀² + σ_N₀² + σ_L² + σ_T²)',
   'theory.radial.p4':
-    'The azimuth error has two parts: the reading to the point and the orientation θ₀ = Az_bs − Hz_bs. The orientation comes from one backsight, and its error turns EVERY point of that setup.',
+    'The azimuth error has two parts: the reading to the point and the orientation θ₀ = Az_bs − Hz_bs. The orientation comes from one backsight, and its error turns EVERY point of that setup. Read on both faces, the backsight’s pointing part falls by √2; its centring does not.',
   'theory.radial.f5': 'σ_Az² = σ_dir(d)² + σ_θ₀²        σ_θ₀² ≈ σ_dir(d_bs)² + ρ"²·(σ_i² + σ_t²) / d_bs²',
   'theory.radial.p5':
     'That is why a short backsight is so bad: centring seen at 10 m becomes a large angular error, which each point then multiplies by its own distance. A point 100 m away, oriented on a backsight 10 m away, inherits about ten times the centring as a sideways error.',
@@ -585,7 +588,7 @@ export default {
     'A corner sighted k times takes the mean of its reductions, and the mean only shrinks what is drawn afresh on every sight.',
   'theory.repeat.l1': 'Averages away (÷√k): direction noise, distance noise, pole or prism centring.',
   'theory.repeat.l2':
-    'Does not, if the sights come from the same occupation: tripod centring, the θ₀ orientation error, single-face collimation, the station’s coordinate error.',
+    'Does not, if the sights come from the same occupation: tripod centring, the θ₀ orientation error, the station’s coordinate error — and collimation, if the backsight and the foresights are read on different faces.',
   'theory.repeat.f1': 'σ_P(k)² ≈ σ_fixed² + σ_random² / k',
   'theory.repeat.p2':
     'Shrinking the fixed part takes a change of procedure: sight the point from another station, use a longer backsight, buy a better tripod, or observe on two faces against collimation.',
@@ -597,9 +600,10 @@ export default {
   'theory.traverse.n1':
     'd₁ and d₂ are the distances to the neighbouring stations and c is the distance between them. The tripod term vanishes when both neighbours lie in the same direction and is largest when they are opposite.',
   'theory.traverse.p2': 'Angular misclosure: the theoretical sum is (n − 2)·180° for interior angles and (n + 2)·180° for exterior ones.',
-  'theory.traverse.f2': 'e_α = Σβ − (n ∓ 2)·180°        T = 2·√2·σ_TS·√n        correction per station = −e_α / n',
+  'theory.traverse.f2':
+    'e_α = Σβ − (n ∓ 2)·180°        T = 2·√(Σ σ_βᵢ²)        correction per station = −e_α / n',
   'theory.traverse.n2':
-    'The game’s tolerance T uses only the instrument’s nominal precision (σ_TS), with no centring. On short legs centring dominates: see "Your numbers right now" for the tolerance predicted with it.',
+    'The tolerance T is 2σ of the closure: it adds up, station by station, the σ_β above — both directions and the centrings, on the legs you measured and the faces you read. With the instrument alone it would be T = 2·√2·σ_TS·√n, the textbook formula; on this valley’s short legs that is far too tight, because it ignores centring.',
   'theory.traverse.p3':
     'Azimuth propagation: each azimuth inherits the one before, so before closure the error grows like a random walk.',
   'theory.traverse.f3': 'Azᵢ = Azᵢ₋₁ + 180° + βᵢ  (mod 360°)        σ_Az,k ≈ σ_β·√k',
@@ -664,14 +668,14 @@ export default {
   'theory.live.colTrans': 'σ_T (direction)',
   'theory.live.colPoint': 'σ_P, backsight at the same distance',
   'theory.live.colPointShort': 'σ_P, backsight at 10 m',
-  'theory.live.colCollimation': 'collimation (systematic)',
+  'theory.live.colMixed': 'collimation, mixed faces',
   'theory.live.tableNote':
-    'Centring in seconds is the tripod’s and the target’s together, seen from that distance. σ_P is the radial error of a radiated point, without the station’s own error. Collimation is a fixed offset, not a σ, and two faces remove it.',
+    'Centring in seconds is the tripod’s and the target’s together, seen from that distance. σ_P is the radial error of a radiated point, without the station’s own error, with the backsight and the sight on the same faces. The last column is the fixed offset collimation brings when the backsight and the sight are read on different faces.',
   'theory.live.traverseTitle': 'Your last traverse',
   'theory.live.noTraverse': 'No traverse has been computed yet. Open the computations once the ring of stations is closed.',
   'theory.live.eAng': 'Angular misclosure',
-  'theory.live.tolGame': 'Game tolerance (σ_TS only)',
-  'theory.live.tolPredicted': 'Predicted tolerance (2σ, centring in)',
+  'theory.live.tolGame': 'Tolerance (2σ, centring in)',
+  'theory.live.tolNominal': 'Instrument only (2·√2·σ_TS·√n)',
   'theory.live.eLin': 'Linear misclosure',
   'theory.live.eLinExpected': 'Expected linear misclosure √E[e²]',
   'theory.live.relObserved': 'Precision achieved',
@@ -683,7 +687,7 @@ export default {
   'theory.live.colBetaTripod': 'tripod',
   'theory.live.colBetaPrism': 'target',
   'theory.live.traverseNote':
-    'An error within ±2σ is what the kit normally gives. Outside the game’s tolerance but inside the predicted one: the instrument met its specification and centring did the rest. Outside both: look for a blunder.',
+    'Inside the tolerance is what the kit normally gives (95 % of the time). Outside it, look for a blunder: a sight on the wrong target, a misrecorded distance, faces mixed at a station. The game does not block delivery over it: the pay depends on the linear precision and the area.',
   'theory.live.areaTitle': 'Area',
   'theory.live.noRing': 'The area’s uncertainty appears once every corner of the property has been sighted.',
   'theory.live.area': 'Surveyed area',

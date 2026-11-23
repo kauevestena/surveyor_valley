@@ -278,6 +278,8 @@ export default {
   'calc.angularTheoretical': 'Σ teórico',
   'calc.angularTolerance': 'Tolerância',
   'calc.angularCorrection': 'Correção por vértice',
+  'calc.toleranceNote':
+    'A tolerância é 2σ do fechamento: as direções e a centragem do tripé e do alvo em cada estação, nos lados que você mediu. Só o instrumento daria ±{nominal}".',
   'calc.interior': 'ângulos internos, (n−2)·180°',
   'calc.exterior': 'ângulos externos, (n+2)·180°',
   'calc.linearClosure': 'Erro de fechamento linear',
@@ -457,7 +459,7 @@ export default {
   // ---- shop ----------------------------------------------------------------
   'shop.title': 'Loja de equipamentos',
   'shop.intro':
-    'Instrumento melhor significa fechamento mais apertado — e serviço mais bem pago. A tolerância ao lado de cada um é a que o painel de cálculos vai cobrar.',
+    'Equipamento melhor significa fechamento mais apertado — e serviço mais bem pago. A tolerância ao lado de cada item é a que o painel de cálculos cobraria numa poligonal típica, com o resto do seu equipamento. Em lados curtos, o tripé e o alvo pesam mais que a estação total.',
   'shop.instruments': 'Estações totais',
   'shop.tripods': 'Tripés',
   'shop.targets': 'Alvos',
@@ -465,7 +467,7 @@ export default {
   'shop.marcoPack': 'Pacote com {n} marcos',
   'shop.marcoHave': 'Você tem {n} na caminhonete',
   'shop.owned': 'Em uso',
-  'shop.tolerance': 'tolerância angular ±{sec}" numa poligonal de 5 estações',
+  'shop.tolerance': 'tolerância angular ±{sec}" numa poligonal de 5 estações com lados de {leg} m',
   'shop.centring': 'erro de centragem σ = {mm} mm',
   'shop.open': 'Loja',
 
@@ -495,13 +497,14 @@ export default {
 
   'settings.twoFace': 'PD/PI',
   'settings.twoFaceHelp':
-    'Observar nas duas posições da luneta. A média das duas cancela o erro de colimação, que é sistemático e nunca some na média de várias leituras numa posição só.',
+    'Observar nas duas posições da luneta: a média cancela a colimação de cada leitura, reduz o ruído por √2 e mostra 2c. A ré é lida nas posições ativas na instalação; mudar no meio de uma estação mistura as posições e traz a colimação de volta.',
   'settings.dms': 'GMS',
   'settings.gon': 'gon',
   'settings.gonHelp': 'Alternar entre graus/minutos/segundos e grados (400 gon = 360°).',
   'caderneta.colHzPD': 'Hz PD',
   'caderneta.colHzPI': 'Hz PI',
   'caderneta.twoCHelp': '2c = PD − (PI − 180°). É o dobro do erro de colimação do instrumento.',
+  'caderneta.reTwoFace': 'ré em PD/PI',
   'pay.overtime': 'Hora extra ({minutes} min, {mult})',
 
   // ---- Bastidores do erro: o painel escondido (digite "erro", ou o σ discreto) ----
@@ -514,7 +517,7 @@ export default {
   'theory.path.p1':
     'Cada marco tem duas posições: a verdadeira, onde ele está fisicamente no vale, e a levantada, que é o que você mediu. Você só vê a levantada. O erro não é sorteado no fim: ele nasce em cada leitura e viaja pelas mesmas contas que você faria à mão.',
   'theory.path.o1':
-    'Instalação. Ao ocupar um marco, sorteia-se a centragem do tripé (em E e em N, uma vez por ocupação) e a leitura da ré carrega erro de pontaria e a centragem do alvo na ré. Daí sai a constante de orientação θ₀, calculada com as coordenadas que você ACREDITA ter para a estação e para a ré.',
+    'Instalação. Ao ocupar um marco, sorteia-se a centragem do tripé (em E e em N, uma vez por ocupação). A ré é lida como qualquer visada: pontaria, centragem do alvo na ré e colimação, nas posições (PD, ou PD/PI) escolhidas na instalação. Daí sai a constante de orientação θ₀, calculada com as coordenadas que você ACREDITA ter para a estação e para a ré.',
   'theory.path.o2':
     'Visada. Para cada ponto sorteiam-se a centragem do bastão ou prisma, o erro de direção (precisão do instrumento + pontaria) e o erro de distância (a mm + b ppm). A colimação c entra igual em toda leitura em PD. A leitura é gerada a partir da geometria VERDADEIRA.',
   'theory.path.o3':
@@ -576,7 +579,7 @@ export default {
   'theory.instrument.n1':
     'PD/PI também tira a média de duas leituras, então o ruído de direção cai por √2. A centragem não melhora: o bastão está no mesmo lugar nas duas leituras.',
   'theory.instrument.n2':
-    'Detalhe do modelo: neste jogo a leitura de orientação na ré não leva colimação, mas toda visada de vante leva +c. Numa só posição, então, os ângulos entre duas vantes da mesma estação (os da poligonal) cancelam c, enquanto todo azimute irradiado gira c, deslocando o vértice d·c/ρ" para o lado (22" a 50 m ≈ 5 mm). Num instrumento real, com visadas quase horizontais, c também afeta a ré e quase se cancela; o efeito real é c/sen z, que cresce em visadas inclinadas.',
+    'Para onde vai a colimação: a ré também é lida com ela, então, nas visadas niveladas de um levantamento planimétrico, c se cancela entre a ré e as vantes sempre que as duas são lidas nas mesmas posições. Ela volta quando você mistura: ré só em PD e vantes em PD/PI (ou o contrário) gira todo azimute irradiado de c, deslocando o vértice d·c/ρ" para o lado (22" a 50 m ≈ 5 mm). A ré é lida nas posições ativas no momento da instalação. Num instrumento real o efeito é c/sen z: em visadas inclinadas ele não se cancela, e esse é o motivo de fundo para observar nas duas posições.',
 
   'theory.radial.title': '5 · Irradiação: do ângulo à coordenada',
   'theory.radial.p1': 'Cada ponto é calculado a partir da estação e de duas medidas.',
@@ -588,7 +591,7 @@ export default {
     'Fica mais claro girando os eixos para a linha de visada: ao longo dela o erro é o do distanciômetro; atravessado, é a distância vezes o erro angular. A elipse de erro se alonga para o lado que for pior.',
   'theory.radial.f4': 'σ_L = σ_d        σ_T = d·σ_Az / ρ"        σ_P = √(σ_E₀² + σ_N₀² + σ_L² + σ_T²)',
   'theory.radial.p4':
-    'O erro do azimute tem duas partes: a leitura do ponto e a orientação θ₀ = Az_ré − Hz_ré. A orientação vem de uma visada à ré, e o erro dela gira TODOS os pontos daquela estação.',
+    'O erro do azimute tem duas partes: a leitura do ponto e a orientação θ₀ = Az_ré − Hz_ré. A orientação vem de uma visada à ré, e o erro dela gira TODOS os pontos daquela estação. Lida em PD/PI, a parte de pontaria da ré cai por √2; a centragem não.',
   'theory.radial.f5': 'σ_Az² = σ_dir(d)² + σ_θ₀²        σ_θ₀² ≈ σ_dir(d_ré)² + ρ"²·(σ_i² + σ_t²) / d_ré²',
   'theory.radial.p5':
     'É por isso que uma ré curta é tão ruim: a centragem vista a 10 m vira um erro angular grande, multiplicado depois pela distância de cada ponto. Um ponto a 100 m orientado numa ré a 10 m herda uns 10 vezes a centragem como erro lateral.',
@@ -600,7 +603,7 @@ export default {
     'Um vértice visado k vezes fica com a média das reduções, e a média só reduz o que é sorteado de novo a cada visada.',
   'theory.repeat.l1': 'Somem com a média (÷√k): ruído de direção, ruído de distância, centragem do bastão ou prisma.',
   'theory.repeat.l2':
-    'Não somem, se as visadas vêm da mesma ocupação: centragem do tripé, erro da orientação θ₀, colimação numa posição só, erro das coordenadas da estação.',
+    'Não somem, se as visadas vêm da mesma ocupação: centragem do tripé, erro da orientação θ₀, erro das coordenadas da estação — e a colimação, se a ré e as vantes forem lidas em posições diferentes.',
   'theory.repeat.f1': 'σ_P(k)² ≈ σ_fixo² + σ_aleatório² / k',
   'theory.repeat.p2':
     'Para atacar a parte fixa é preciso mudar o procedimento: visar o ponto de outra estação, usar uma ré mais longa, comprar um tripé melhor, ou observar em PD/PI contra a colimação.',
@@ -613,9 +616,10 @@ export default {
     'd₁ e d₂ são as distâncias às estações vizinhas e c é a distância entre elas. O termo do tripé some quando as duas vizinhas estão na mesma direção e é máximo quando estão opostas.',
   'theory.traverse.p2':
     'Fechamento angular: a soma teórica é (n − 2)·180° para ângulos internos e (n + 2)·180° para externos.',
-  'theory.traverse.f2': 'e_α = Σβ − (n ∓ 2)·180°        T = 2·√2·σ_ET·√n        correção por estação = −e_α / n',
+  'theory.traverse.f2':
+    'e_α = Σβ − (n ∓ 2)·180°        T = 2·√(Σ σ_βᵢ²)        correção por estação = −e_α / n',
   'theory.traverse.n2':
-    'A tolerância T do jogo usa só a precisão nominal do instrumento (σ_ET), sem centragem. Em lados curtos a centragem domina: veja em "Seus números agora" a tolerância prevista com ela.',
+    'A tolerância T é 2σ do fechamento: soma, estação por estação, o σ_β acima — as duas direções e as centragens, nos lados que você mediu e nas posições em que leu. Só com o instrumento seria T = 2·√2·σ_ET·√n, a fórmula de livro; nos lados curtos deste vale ela é apertada demais, porque ignora a centragem.',
   'theory.traverse.p3':
     'Transporte de azimutes: cada azimute herda o anterior, então antes do fechamento o erro cresce como um passeio aleatório.',
   'theory.traverse.f3': 'Azᵢ = Azᵢ₋₁ + 180° + βᵢ  (mod 360°)        σ_Az,k ≈ σ_β·√k',
@@ -680,14 +684,14 @@ export default {
   'theory.live.colTrans': 'σ_T (direção)',
   'theory.live.colPoint': 'σ_P, ré à mesma distância',
   'theory.live.colPointShort': 'σ_P, ré a 10 m',
-  'theory.live.colCollimation': 'colimação (sistemático)',
+  'theory.live.colMixed': 'colimação, posições misturadas',
   'theory.live.tableNote':
-    'Centragem em segundos é a do tripé e a do alvo juntas, vistas daquela distância. σ_P é o erro radial de um ponto irradiado, sem o erro da estação. A colimação é um desvio fixo, não um σ, e some com PD/PI.',
+    'Centragem em segundos é a do tripé e a do alvo juntas, vistas daquela distância. σ_P é o erro radial de um ponto irradiado, sem o erro da estação, com a ré e a visada nas mesmas posições. A última coluna é o desvio fixo que a colimação traz quando a ré e a visada são lidas em posições diferentes.',
   'theory.live.traverseTitle': 'Sua última poligonal',
   'theory.live.noTraverse': 'Ainda não há poligonal calculada. Abra os cálculos depois de fechar o anel de estações.',
   'theory.live.eAng': 'Erro angular obtido',
-  'theory.live.tolGame': 'Tolerância do jogo (só σ_ET)',
-  'theory.live.tolPredicted': 'Tolerância prevista (2σ, com centragem)',
+  'theory.live.tolGame': 'Tolerância (2σ, com centragem)',
+  'theory.live.tolNominal': 'Só o instrumento (2·√2·σ_ET·√n)',
   'theory.live.eLin': 'Erro linear obtido',
   'theory.live.eLinExpected': 'Erro linear esperado √E[e²]',
   'theory.live.relObserved': 'Precisão obtida',
@@ -699,7 +703,7 @@ export default {
   'theory.live.colBetaTripod': 'tripé',
   'theory.live.colBetaPrism': 'alvo',
   'theory.live.traverseNote':
-    'Um erro dentro de ±2σ é o que o equipamento costuma dar. Fora da tolerância do jogo mas dentro da prevista: o instrumento cumpriu a especificação e a centragem fez o resto. Fora das duas: procure um engano.',
+    'Dentro da tolerância é o que o equipamento costuma dar (95 % das vezes). Fora dela, procure um engano: uma visada no alvo errado, uma distância anotada errada, posições misturadas numa estação. O jogo não bloqueia a entrega por isso: o pagamento depende da precisão linear e da área.',
   'theory.live.areaTitle': 'Área',
   'theory.live.noRing': 'A incerteza da área aparece quando todos os vértices da propriedade tiverem sido visados.',
   'theory.live.area': 'Área levantada',

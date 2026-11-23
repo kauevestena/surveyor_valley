@@ -15,7 +15,7 @@
 import { el, table } from './dom.js';
 import { t, num, locale } from './i18n.js';
 import { specOf } from '../survey/instrument.js';
-import { formatRelPrecision } from '../survey/traverse.js';
+import { formatRelPrecision, angularTolerance } from '../survey/traverse.js';
 import { areaOf } from '../survey/geometry.js';
 import { kitTable, traversePrediction, areaSigma } from '../survey/budget.js';
 
@@ -133,7 +133,7 @@ function liveTable({ kit, twoFace }) {
         t('theory.live.colTrans'),
         t('theory.live.colPoint'),
         t('theory.live.colPointShort'),
-        t('theory.live.colCollimation'),
+        t('theory.live.colMixed'),
       ],
       rows.map((r) => [
         `${r.d} m`,
@@ -143,7 +143,7 @@ function liveTable({ kit, twoFace }) {
         mm(r.transDirMm),
         mm(r.pointMm),
         mm(r.pointShortReMm),
-        mm(r.collimationMm),
+        mm(r.mixedFacesMm),
       ]),
     ),
   );
@@ -155,15 +155,19 @@ function liveTraverse({ kit, twoFace, traverse, requiredPrecision }) {
 
   const absE = Math.abs(traverse.eAngSec);
   const loc = locale();
+  // A traverse saved before the tolerance counted centring carries only the
+  // instrument's figure; the prediction is the same 2σ worked out here.
+  const tol = traverse.tolIncludesCentring ? traverse.tolAngSec : pred.tolPredictedSec;
+  const nominal = traverse.tolAngNominalSec ?? angularTolerance(kit.instrument.sigmaDirSec, traverse.nStations);
   return el(
     'div',
     {},
     el(
       'div.stats',
       {},
-      stat(t('theory.live.eAng'), sec(traverse.eAngSec), absE <= traverse.tolAngSec ? '.is-good' : '.is-bad'),
-      stat(t('theory.live.tolGame'), `± ${sec(traverse.tolAngSec)}`),
-      stat(t('theory.live.tolPredicted'), `± ${sec(pred.tolPredictedSec)}`, absE <= pred.tolPredictedSec ? '.is-good' : '.is-bad'),
+      stat(t('theory.live.eAng'), sec(traverse.eAngSec), absE <= tol ? '.is-good' : '.is-bad'),
+      stat(t('theory.live.tolGame'), `± ${sec(tol)}`),
+      stat(t('theory.live.tolNominal'), `± ${sec(nominal)}`),
       stat(t('theory.live.eLin'), `${num(traverse.eLin, 3)} m`),
       stat(t('theory.live.eLinExpected'), `${num(pred.sigmaLin, 3)} m`),
       stat(t('theory.live.relObserved'), formatRelPrecision(traverse.relDenominator, loc)),

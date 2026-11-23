@@ -106,6 +106,9 @@ export function renderCaderneta({ setups, observations }) {
           el('h4', { text: t('caderneta.setup', { id: setup.id }) }),
           el('span.muted', { text: where }),
           el('span.theta', { text: `${t('station.theta0')} = ${fmtAngle(setup.theta0)}` }),
+          // The faces the orientation was taken on. Sights on other faces mix
+          // them, and the collimation comes back — so it is worth seeing.
+          setup.backsightTwoFace ? el('span.theta', { text: t('caderneta.reTwoFace') }) : null,
           el('span.muted', { text: `E ${num(setup.E, 3)} · N ${num(setup.N, 3)}` }),
           // The number the procedure exists to produce. Averaging more readings
           // on ONE face can never remove this; swinging the telescope does.

@@ -19,7 +19,7 @@
 // still land within a few per cent of a simulation.
 
 import { directionSigma, distanceSigma } from './instrument.js';
-import { distance } from './geometry.js';
+import { toRad } from './units.js';
 
 /** Arc-seconds in one radian, ρ" = 180·3600/π ≈ 206 265. */
 export const RHO_SEC = (180 / Math.PI) * 3600;
@@ -49,14 +49,14 @@ export function directionTerms(instrument, d, { twoFace = false } = {}) {
 /**
  * σ of the orientation θ₀ = Az_ré − Hz_ré, in arc-seconds.
  *
- * The backsight is ONE reading — `setupOverKnownPoint` never takes it on two
- * faces — plus the tripod's centring and the ré target's own, both seen as an
- * angle at the backsight distance:
+ * The ré reading — one face, or the mean of two when the setup was made with
+ * PD/PI on — plus the tripod's centring and the ré target's own, both seen as
+ * an angle at the backsight distance:
  *
  *     σ_θ₀² = σ_dir(d_ré)² + (ρ"·σ_i/d_ré)² + (ρ"·σ_t/d_ré)²
  */
-export function orientationSigmaSec({ kit, dRe }) {
-  const dir = directionTerms(kit.instrument, dRe).total;
+export function orientationSigmaSec({ kit, dRe, twoFaceRe = false }) {
+  const dir = directionTerms(kit.instrument, dRe, { twoFace: twoFaceRe }).total;
   const ci = centringSec(kit.tripod.centringSigma_mm, dRe);
   const ct = centringSec(kit.target.centringSigma_mm, dRe);
   return Math.sqrt(dir * dir + ci * ci + ct * ct);
@@ -72,8 +72,9 @@ export function orientationSigmaSec({ kit, dRe }) {
  *
  * `fixed` is the part a repeated sight from the SAME setup cannot average
  * (the tripod's centring, drawn once per occupation, and the orientation);
- * `random` is the part it can. `collimation` is a bias, not a σ: on a
- * single-face sight the model rotates every radiated azimuth by c.
+ * `random` is the part it can. `collimation` is a bias, not a σ: zero when the
+ * sight and the ré were read on the same faces, because c cancels between
+ * them; d·c/ρ" when the faces were mixed.
  *
  * The station's own coordinate error is not included: it is the traverse's
  * business, and it moves every point of the setup by the same vector.
@@ -81,10 +82,10 @@ export function orientationSigmaSec({ kit, dRe }) {
  * @returns {{longitudinal:number, transverse:number, fixed:number, random:number,
  *            total:number, collimation:number}} metres; total = √(σ_E² + σ_N²)
  */
-export function pointSigma({ kit, d, dRe = d, twoFace = false }) {
+export function pointSigma({ kit, d, dRe = d, twoFace = false, twoFaceRe = twoFace }) {
   const sd = distanceSigma(kit.instrument, d);
   const dirRad = directionTerms(kit.instrument, d, { twoFace }).total / RHO_SEC;
-  const oriRad = orientationSigmaSec({ kit, dRe }) / RHO_SEC;
+  const oriRad = orientationSigmaSec({ kit, dRe, twoFaceRe }) / RHO_SEC;
   const si = kit.tripod.centringSigma_mm / 1000;
   const st = kit.target.centringSigma_mm / 1000;
 
@@ -92,7 +93,7 @@ export function pointSigma({ kit, d, dRe = d, twoFace = false }) {
   const transverse = Math.sqrt((d * dirRad) ** 2 + (d * oriRad) ** 2 + si * si + st * st);
   const fixed = Math.sqrt(2 * si * si + (d * oriRad) ** 2);
   const random = Math.sqrt(sd * sd + (d * dirRad) ** 2 + 2 * st * st);
-  const collimation = twoFace ? 0 : (d * (kit.instrument.collimationSec ?? 0)) / RHO_SEC;
+  const collimation = Boolean(twoFace) === Boolean(twoFaceRe) ? 0 : (d * (kit.instrument.collimationSec ?? 0)) / RHO_SEC;
 
   return {
     longitudinal,
@@ -109,7 +110,7 @@ export function pointSigma({ kit, d, dRe = d, twoFace = false }) {
  * not. Conservative when the sights came from different setups, whose fixed
  * parts would in fact average too.
  *
- * @param {Array<{d:number, dRe?:number|null, twoFace?:boolean}>} sights
+ * @param {Array<{d:number, dRe?:number|null, twoFace?:boolean, twoFaceRe?:boolean}>} sights
  * @returns {{total:number, perAxis:number, k:number}} metres
  */
 export function sightsSigma({ kit, sights }) {
@@ -118,7 +119,8 @@ export function sightsSigma({ kit, sights }) {
   let fixed2 = 0;
   let random2 = 0;
   for (const s of sights) {
-    const p = pointSigma({ kit, d: s.d, dRe: s.dRe ?? s.d, twoFace: Boolean(s.twoFace) });
+    const twoFace = Boolean(s.twoFace);
+    const p = pointSigma({ kit, d: s.d, dRe: s.dRe ?? s.d, twoFace, twoFaceRe: s.twoFaceRe ?? twoFace });
     fixed2 += p.fixed * p.fixed;
     random2 += p.random * p.random;
   }
@@ -137,17 +139,64 @@ export function sightsSigma({ kit, sights }) {
  * The tripod term is the classic one: a displaced instrument swings both
  * directions, and what is left of it in the angle depends on how far apart the
  * two targets are — nothing when they line up, the most when they are opposite.
+ * Each reading has its own faces: `twoFace` sets both, and `twoFaceBack` /
+ * `twoFaceFwd` override one.
  * @returns {{direction:number, tripod:number, prism:number, total:number}} arc-seconds
  */
-export function angleSigmaSec({ kit, d1, d2, chord, twoFace = false }) {
-  const a = directionTerms(kit.instrument, d1, { twoFace }).total;
-  const b = directionTerms(kit.instrument, d2, { twoFace }).total;
+export function angleSigmaSec({ kit, d1, d2, chord, twoFace = false, twoFaceBack = twoFace, twoFaceFwd = twoFace }) {
+  const a = directionTerms(kit.instrument, d1, { twoFace: twoFaceBack }).total;
+  const b = directionTerms(kit.instrument, d2, { twoFace: twoFaceFwd }).total;
   const direction = Math.hypot(a, b);
   const si = kit.tripod.centringSigma_mm / 1000;
   const st = kit.target.centringSigma_mm / 1000;
   const tripod = (RHO_SEC * si * chord) / Math.max(d1 * d2, 1e-9);
   const prism = RHO_SEC * st * Math.sqrt(1 / (d1 * d1) + 1 / (d2 * d2));
   return { direction, tripod, prism, total: Math.sqrt(direction ** 2 + tripod ** 2 + prism ** 2) };
+}
+
+/**
+ * σ_β at every station of a traverse, from the traverse's own observations:
+ * the legs either side (d₁ = leg i−1, d₂ = leg i, the index convention of
+ * `traverse.js`), the chord between the two neighbours by the law of cosines,
+ * and the faces each of the two readings was taken on.
+ *
+ * This is the ONE place the per-station σ is worked out: `computeTraverse`
+ * takes its tolerance from it and the theory panel its prediction, so the
+ * verdict and the explanation cannot disagree.
+ *
+ * @param {number[]} p.angles     angle to the right at each station, degrees
+ * @param {number[]} p.distances  leg i → i+1, metres
+ * @param {Array<{back:boolean, fwd:boolean}>} [p.faces]
+ */
+export function traverseAngleSigmas({ kit, angles, distances, faces = [] }) {
+  const n = angles.length;
+  return angles.map((beta, i) => {
+    const d1 = distances[(i - 1 + n) % n];
+    const d2 = distances[i];
+    const chord = Math.sqrt(Math.max(0, d1 * d1 + d2 * d2 - 2 * d1 * d2 * Math.cos(toRad(beta))));
+    const f = faces[i] || {};
+    return {
+      d1,
+      d2,
+      chord,
+      ...angleSigmaSec({ kit, d1, d2, chord, twoFaceBack: Boolean(f.back), twoFaceFwd: Boolean(f.fwd) }),
+    };
+  });
+}
+
+/** The leg length the shop quotes its tolerances on: a typical traverse in this valley. */
+export const TYPICAL_LEG = 25;
+
+/**
+ * The angular tolerance a kit would be held to on a regular n-sided traverse
+ * of `leg`-metre sides: 2·√n·σ_β, with the interior angle (n−2)·180°/n and the
+ * two neighbours 2·leg·sin(β/2) apart. What the shop quotes beside each item.
+ */
+export function typicalTolerance({ kit, n = 5, leg = TYPICAL_LEG, twoFace = false }) {
+  const beta = ((n - 2) * 180) / n;
+  const chord = 2 * leg * Math.sin(toRad(beta / 2));
+  const sb = angleSigmaSec({ kit, d1: leg, d2: leg, chord, twoFace }).total;
+  return 2 * Math.sqrt(n) * sb;
 }
 
 /**
@@ -185,7 +234,11 @@ export function expectedMisclosure({ coords, sigmaBetaSec, sigmaDist }) {
 
 /**
  * What the kit predicts for a traverse the player has already computed, to
- * set beside what it actually closed to. Geometry from `traverse.coords`.
+ * set beside what it actually closed to.
+ *
+ * The per-station σ_β is the one the traverse's own tolerance was built from
+ * when it carries it (`computeTraverse` with a kit); otherwise it is worked
+ * out here the same way, from the traverse's angles, legs and faces.
  *
  * Distances carry the tripod's centring at the near end and the prism's at the
  * far end, along the line, on top of the EDM's own σ.
@@ -195,18 +248,18 @@ export function expectedMisclosure({ coords, sigmaBetaSec, sigmaDist }) {
 export function traversePrediction({ traverse, kit, twoFace = false }) {
   if (!traverse?.ok) return null;
   const pts = traverse.coords;
-  const n = pts.length;
   const si = kit.tripod.centringSigma_mm / 1000;
   const st = kit.target.centringSigma_mm / 1000;
 
-  const stations = pts.map((here, i) => {
-    const back = pts[(i - 1 + n) % n];
-    const fwd = pts[(i + 1) % n];
-    const d1 = distance(here.E, here.N, back.E, back.N);
-    const d2 = distance(here.E, here.N, fwd.E, fwd.N);
-    const chord = distance(back.E, back.N, fwd.E, fwd.N);
-    return { id: here.id, d1, d2, chord, ...angleSigmaSec({ kit, d1, d2, chord, twoFace }) };
-  });
+  const sigmas =
+    traverse.angleSigmas ??
+    traverseAngleSigmas({
+      kit,
+      angles: traverse.rows.map((r) => r.angleObs),
+      distances: traverse.rows.map((r) => r.distance),
+      faces: traverse.faces ?? traverse.rows.map(() => ({ back: twoFace, fwd: twoFace })),
+    });
+  const stations = sigmas.map((s, i) => ({ id: traverse.rows[i].from, ...s }));
 
   const sigmaBetaSec = stations.map((s) => s.total);
   const sigmaDist = traverse.rows.map((r) => {
@@ -222,7 +275,7 @@ export function traversePrediction({ traverse, kit, twoFace = false }) {
     sigmaDist,
     /** σ of Σβ, centring included. */
     sigmaAngClosureSec,
-    /** 2σ, the same ~95% convention as the game's tolerance, but with centring in. */
+    /** 2σ — the tolerance `computeTraverse` applies when it is given the kit. */
     tolPredictedSec: 2 * sigmaAngClosureSec,
     sigmaLin: lin.sigma,
     sigmaLinFromDistances: lin.fromDistances,
@@ -271,11 +324,17 @@ export function ringSigmas({ markIds, observations, setups, kit }) {
   return markIds.map((id) => {
     const sights = observations
       .filter((o) => o.targetId === id)
-      .map((o) => ({
-        d: o.distance,
-        dRe: setupById.get(o.setupId)?.backsightDistance ?? null,
-        twoFace: o.twoFace,
-      }));
+      .map((o) => {
+        const setup = setupById.get(o.setupId);
+        return {
+          d: o.distance,
+          dRe: setup?.backsightDistance ?? null,
+          twoFace: Boolean(o.twoFace),
+          // The faces the orientation was taken on: the ré's, or a free
+          // station's resection sights'. Absent on older saves: one face.
+          twoFaceRe: Boolean(setup?.backsightTwoFace),
+        };
+      });
     return sightsSigma({ kit, sights });
   });
 }
@@ -298,7 +357,8 @@ export function kitTable(kit, { distances = TABLE_DISTANCES, twoFace = false, sh
       transDirMm: ((d * dir.total) / RHO_SEC) * 1000,
       pointMm: same.total * 1000,
       pointShortReMm: short.total * 1000,
-      collimationMm: same.collimation * 1000,
+      /** What mixing faces would cost: the ré on one, the sight on the other. */
+      mixedFacesMm: ((d * (kit.instrument.collimationSec ?? 0)) / RHO_SEC) * 1000,
     };
   });
 }

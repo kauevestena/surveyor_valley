@@ -18,9 +18,15 @@ import { secToDeg } from './units.js';
  *
  * `collimationSec` is the horizontal collimation error c: a fixed mechanical
  * misalignment of the line of sight, NOT noise. It is the same value on every
- * sight from that instrument, in every job, forever — which is exactly why
- * averaging more single-face readings can never remove it, and why the
- * two-face procedure exists. Cheaper instruments carry more of it.
+ * reading from that instrument, in every job, forever — which is exactly why
+ * averaging more single-face readings can never remove it from a reading, and
+ * why the two-face procedure exists. Cheaper instruments carry more of it.
+ *
+ * It rides on the ré as well as on the vantes, so on the level sights of a
+ * planimetric survey it cancels between them whenever both are read on the
+ * same faces, as it does on a real instrument. What survives is the mistake of
+ * MIXING faces — the ré on one, the vantes on two — which turns every radiated
+ * azimuth by c. See `station.js#setupOverKnownPoint`.
  */
 export const TIERS = [
   { id: 'et10', sigmaDirSec: 10, distA_mm: 10, distPPM: 10, collimationSec: 22, price: 0 },

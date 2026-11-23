@@ -38,7 +38,7 @@ let setupCounter = 0;
  * @param {string} [p.orientMode]
  * @returns {object} setup record
  */
-export function setupOverKnownPoint({ over, backsight, kit, rng, orientMode = ORIENT.ZERO_BACKSIGHT }) {
+export function setupOverKnownPoint({ over, backsight, kit, rng, orientMode = ORIENT.ZERO_BACKSIGHT, twoFace = false }) {
   const centring = drawCentring(rng, kit.tripod.centringSigma_mm);
   const trueE = over.trueE + centring.dE;
   const trueN = over.trueN + centring.dN;
@@ -57,15 +57,37 @@ export function setupOverKnownPoint({ over, backsight, kit, rng, orientMode = OR
   const sigmaDir = directionSigma(kit.instrument, dBs);
   const pointingErr = rng.gauss() * sigmaDir;
 
+  // The ré is a sight like any other, so face I reads it c high, exactly as it
+  // reads every foresight. That is what makes collimation cancel between the
+  // ré and the vantes when both are read on the same faces — which, on the
+  // level sights of a planimetric survey, is what a real instrument does. It
+  // used to be read clean while the foresights carried +c, and that turned
+  // every radiated azimuth of a single-face survey by c.
+  const cDeg = collimationFor(kit.instrument, FACE.DIRECT);
+
   // `circleOffset` is the azimuth that the circle reads as zero.
   let circleOffset;
-  let backsightReading;
+  let backsightPD;
   if (orientMode === ORIENT.ZERO_BACKSIGHT) {
-    circleOffset = trueAzBs + pointingErr;
-    backsightReading = 0;
+    // Zeroing sets the circle to read 0 at the crosshair, collimation and all.
+    circleOffset = trueAzBs + pointingErr + cDeg;
+    backsightPD = 0;
   } else {
     circleOffset = rng.range(0, 360);
-    backsightReading = normalize360(trueAzBs + pointingErr - circleOffset);
+    backsightPD = normalize360(trueAzBs + pointingErr + cDeg - circleOffset);
+  }
+
+  // On two faces the ré is read again through the transited telescope, and
+  // the orientation uses the mean — c cancels and the pointing noise falls by
+  // √2. The faces are chosen HERE, at setup: a foresight later read on other
+  // faces than the ré mixes them, and c comes back as a rotation of ±c.
+  let backsightPI = null;
+  let backsightReading = backsightPD;
+  if (twoFace) {
+    const piErr = rng.gauss() * sigmaDir;
+    backsightPI = normalize360(trueAzBs + piErr - cDeg - circleOffset + 180);
+    // The short way round, as in `sightTarget`.
+    backsightReading = normalize360(backsightPD + normalize180(backsightPI - 180 - backsightPD) / 2);
   }
 
   const theta0 = normalize360(knownAzBs - backsightReading);
@@ -82,7 +104,11 @@ export function setupOverKnownPoint({ over, backsight, kit, rng, orientMode = OR
     trueN,
     circleOffset,
     theta0,
+    /** The orientation reading: face I, or the mean of both faces. */
     backsightReading,
+    backsightTwoFace: Boolean(twoFace),
+    backsightPD,
+    backsightPI,
     backsightAzimuth: knownAzBs,
     backsightDistance: dBs,
     instrumentId: kit.instrument.id,

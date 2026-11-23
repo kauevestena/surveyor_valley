@@ -277,6 +277,8 @@ export function buildTraverseInput({ setups, findControlPoint }) {
     stations: order.map((s) => ({ id: s.id })),
     angles,
     distances,
+    /** The faces of each angle's two readings, for the tolerance. */
+    faces: picks.map((p) => ({ back: Boolean(p.oBack.twoFace), fwd: Boolean(p.oFwd.twoFace) })),
     startPoint: { E: first.E, N: first.N },
     startAzimuth: azimuth(first.E, first.N, second.E, second.N),
   };

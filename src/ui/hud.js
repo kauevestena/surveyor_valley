@@ -149,8 +149,10 @@ export function makeHud(root, { onShop, onJobs, onBatch, onToggleSetting, onChec
    * Two survey-practice switches, beside the action they affect.
    *
    * Two-face is per-sight and optional on purpose: a rushed single-face survey
-   * stays possible, and is measurably worse, because collimation error is
-   * systematic and never averages out. Making it visible is the teaching.
+   * stays possible. Collimation cancels between the ré and the vantes when both
+   * are read on the same faces — the ré takes the faces active at setup — and
+   * switching mid-station mixes them, which brings it back. Making that visible
+   * is the teaching.
    */
   const toggle = (key, labelKey, titleKey) => {
     const btn = el('button.btn.chip-toggle', {

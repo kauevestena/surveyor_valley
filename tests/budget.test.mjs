@@ -17,6 +17,9 @@ import {
   pointSigma,
   sightsSigma,
   angleSigmaSec,
+  traverseAngleSigmas,
+  typicalTolerance,
+  TYPICAL_LEG,
   expectedMisclosure,
   traversePrediction,
   areaSigma,
@@ -28,7 +31,7 @@ import { resolveKit, directionSigma } from '../src/survey/instrument.js';
 import { setupOverKnownPoint, sightTarget } from '../src/survey/station.js';
 import { computeTraverse, anglesFromCoords, distancesFromCoords, angularTolerance } from '../src/survey/traverse.js';
 import { azimuth, areaOf } from '../src/survey/geometry.js';
-import { normalize180 } from '../src/survey/units.js';
+import { normalize180, toRad } from '../src/survey/units.js';
 import { makeRng } from '../src/core/rng.js';
 import pt from '../src/ui/lang/pt.js';
 import en from '../src/ui/lang/en.js';
@@ -135,26 +138,36 @@ test('angle σ matches the observation model in station.js, centring and all', (
   }
 });
 
-test('a radiated point scatters by σ_P, and single-face collimation adds its bias on top', () => {
+test('a radiated point scatters by σ_P; collimation adds a bias only when the faces are mixed', () => {
   const rng = makeRng('budget', 'point');
   const S = { id: 'S', E: 0, N: 0, trueE: 0, trueN: 0 };
   const A = { id: 'A', E: 0, N: 25, trueE: 0, trueN: 25 };
   const C = { id: 'C', E: 60, N: 15, trueE: 60, trueN: 15 };
   const d = Math.hypot(60, 15);
 
-  for (const twoFace of [false, true]) {
+  // [faces of the ré, faces of the sight]
+  for (const [twoFaceRe, twoFace] of [[false, false], [true, true], [false, true], [true, false]]) {
     let s2 = 0;
     const n = 4000;
     for (let i = 0; i < n; i++) {
-      const setup = setupOverKnownPoint({ over: S, backsight: A, kit: STARTER, rng });
+      const setup = setupOverKnownPoint({ over: S, backsight: A, kit: STARTER, rng, twoFace: twoFaceRe });
       const o = sightTarget({ setup, target: C, kit: STARTER, rng, twoFace });
       s2 += (o.E - C.E) ** 2 + (o.N - C.N) ** 2;
     }
-    const p = pointSigma({ kit: STARTER, d, dRe: 25, twoFace });
+    const p = pointSigma({ kit: STARTER, d, dRe: 25, twoFace, twoFaceRe });
     // Mean square error = variance + bias²: the bias is the collimation.
-    within(Math.sqrt(s2 / n), Math.hypot(p.total, p.collimation), 0.05, `radial RMS (twoFace=${twoFace})`);
-    if (twoFace) near(p.collimation, 0, 0);
+    within(Math.sqrt(s2 / n), Math.hypot(p.total, p.collimation), 0.05, `radial RMS (ré ${twoFaceRe}, sight ${twoFace})`);
+    if (twoFace === twoFaceRe) near(p.collimation, 0, 0, 'same faces: c cancels');
+    else near(p.collimation, (d * STARTER.instrument.collimationSec) / RHO_SEC, 1e-12, 'mixed: d·c/ρ"');
   }
+});
+
+test('a two-face ré is a quieter orientation; centring is untouched by it', () => {
+  const one = orientationSigmaSec({ kit: NO_CENTRING, dRe: 30 });
+  const two = orientationSigmaSec({ kit: NO_CENTRING, dRe: 30, twoFaceRe: true });
+  near(two, one / Math.SQRT2, 1e-9);
+  // With centring in, the √2 only touches the pointing part.
+  assert.ok(orientationSigmaSec({ kit: STARTER, dRe: 30, twoFaceRe: true }) > orientationSigmaSec({ kit: STARTER, dRe: 30 }) / Math.SQRT2);
 });
 
 test('expected linear misclosure matches a simulated traverse, after equal angle distribution', () => {
@@ -183,6 +196,68 @@ test('expected linear misclosure matches a simulated traverse, after equal angle
   // The radii are to the centroid, not to the first station.
   const cE = pts.reduce((s, p) => s + p.E, 0) / pts.length;
   near(predicted.radii[0], Math.hypot(pts[0].E - cE, pts[0].N - pts.reduce((s, p) => s + p.N, 0) / pts.length), 1e-9);
+});
+
+test("each station's σ_β uses its own two legs and the chord between its neighbours", () => {
+  const pts = PENTAGON;
+  const sig = traverseAngleSigmas({ kit: STARTER, angles: anglesFromCoords(pts), distances: distancesFromCoords(pts) });
+  const n = pts.length;
+  sig.forEach((s, i) => {
+    const back = pts[(i - 1 + n) % n];
+    const here = pts[i];
+    const fwd = pts[(i + 1) % n];
+    near(s.d1, Math.hypot(here.E - back.E, here.N - back.N), 1e-9, `d₁ at ${i}`);
+    near(s.d2, Math.hypot(fwd.E - here.E, fwd.N - here.N), 1e-9, `d₂ at ${i}`);
+    near(s.chord, Math.hypot(fwd.E - back.E, fwd.N - back.N), 1e-9, `chord at ${i}: the law of cosines`);
+  });
+  // Faces are per reading: both on two faces is quieter than one, which is quieter than none.
+  const faces = (back, fwd) => pts.map(() => ({ back, fwd }));
+  const t = (f) => traverseAngleSigmas({ kit: STARTER, angles: anglesFromCoords(pts), distances: distancesFromCoords(pts), faces: f })[0].direction;
+  assert.ok(t(faces(true, true)) < t(faces(true, false)) && t(faces(true, false)) < t(faces(false, false)));
+});
+
+test('with a kit, the traverse tolerance is 2σ of the closure, centring in', () => {
+  const pts = PENTAGON;
+  const args = {
+    stations: pts.map((p) => ({ id: p.id })),
+    angles: anglesFromCoords(pts),
+    distances: distancesFromCoords(pts),
+    startPoint: pts[0],
+    startAzimuth: azimuth(pts[0].E, pts[0].N, pts[1].E, pts[1].N),
+    sigmaDirSec: 10,
+  };
+  const bare = computeTraverse(args);
+  const withKit = computeTraverse({ ...args, kit: STARTER });
+
+  assert.equal(bare.tolIncludesCentring, false);
+  near(bare.tolAngSec, angularTolerance(10, 5), 1e-9, 'no kit: the textbook figure, unchanged');
+  assert.equal(withKit.tolIncludesCentring, true);
+  near(withKit.tolAngNominalSec, angularTolerance(10, 5), 1e-9);
+  const expected = 2 * Math.sqrt(withKit.angleSigmas.reduce((s, a) => s + a.total ** 2, 0));
+  near(withKit.tolAngSec, expected, 1e-9);
+  assert.ok(withKit.tolAngSec > 2 * withKit.tolAngNominalSec, 'a 5 mm pole on 60 m legs counts for more than the 10" itself');
+
+  // The panel's prediction is the verdict's own number.
+  near(traversePrediction({ traverse: withKit, kit: STARTER }).tolPredictedSec, withKit.tolAngSec, 1e-9);
+  near(traversePrediction({ traverse: bare, kit: STARTER }).tolPredictedSec, withKit.tolAngSec, 1e-9, 'and recomputed the same way');
+
+  const better = resolveKit({ instrument: 'et10', tripod: 'tri-fib', target: 'prisma-tri' });
+  assert.ok(computeTraverse({ ...args, kit: better }).tolAngSec < withKit.tolAngSec, 'better centring, tighter tolerance');
+});
+
+test("the shop's typical tolerance: a regular pentagon of 25 m legs", () => {
+  const chord = 2 * 25 * Math.sin(toRad(54));
+  const sb = angleSigmaSec({ kit: STARTER, d1: 25, d2: 25, chord }).total;
+  near(typicalTolerance({ kit: STARTER }), 2 * Math.sqrt(5) * sb, 1e-9);
+  assert.equal(TYPICAL_LEG, 25);
+
+  const prism = resolveKit({ instrument: 'et10', tripod: 'tri-mad', target: 'prisma-tri' });
+  const top = resolveKit({ instrument: 'et1', tripod: 'tri-fib', target: 'prisma-tri' });
+  const inst = resolveKit({ instrument: 'et1', tripod: 'tri-mad', target: 'bastao' });
+  const starter = typicalTolerance({ kit: STARTER });
+  assert.ok(typicalTolerance({ kit: prism }) < starter * 0.7, 'the prism is the big step');
+  assert.ok(typicalTolerance({ kit: inst }) > starter * 0.9, 'the instrument alone barely moves it on short legs');
+  assert.ok(typicalTolerance({ kit: top }) < typicalTolerance({ kit: prism }));
 });
 
 test('traversePrediction reads a computed traverse and gives 2σ and an expected 1:X', () => {
@@ -239,9 +314,11 @@ test('the kit table has one row per distance and grows the way the theory says',
   assert.deepEqual(rows.map((r) => r.d), TABLE_DISTANCES);
   for (let i = 1; i < rows.length; i++) {
     assert.ok(rows[i].centringSec < rows[i - 1].centringSec, 'centring as an angle falls with distance');
-    assert.ok(rows[i].collimationMm > rows[i - 1].collimationMm, 'collimation as a displacement grows');
+    assert.ok(rows[i].mixedFacesMm > rows[i - 1].mixedFacesMm, 'mixing faces costs more the further the point');
   }
-  assert.ok(kitTable(STARTER, { twoFace: true }).every((r) => r.collimationMm === 0), 'two faces remove it');
+  near(rows[3].mixedFacesMm, (50 * 22 * 1000) / RHO_SEC, 1e-9, '22" at 50 m');
+  // Consistent faces carry no collimation, so the point σ is the same either way but quieter on two.
+  assert.ok(kitTable(STARTER, { twoFace: true }).every((r, i) => r.pointMm < rows[i].pointMm));
 });
 
 // ------------------------------------------------------------------ i18n ----

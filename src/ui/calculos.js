@@ -130,6 +130,12 @@ export function renderCalculos({ traverse, area, requiredPrecision, rule, onRule
         stat('calc.angularCorrection', `${traverse.angleCorrSec.toFixed(1)}"`),
       ),
       el(`p.verdict${angOk ? '.is-good' : '.is-bad'}`, { text: t(angOk ? 'calc.pass' : 'calc.fail') }),
+      // Where the tolerance comes from. It used to be the instrument's σ alone,
+      // which a 5 mm pole 15 m away beats on its own; saying what it is made of
+      // is what lets a student read a fail as a blunder rather than bad luck.
+      traverse.tolIncludesCentring
+        ? el('p.hint', { text: t('calc.toleranceNote', { nominal: traverse.tolAngNominalSec.toFixed(1) }) })
+        : null,
     ),
   );
 

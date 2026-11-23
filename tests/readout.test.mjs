@@ -64,6 +64,24 @@ test('aimed at the ré, the circle reads zero and so does the angle from it', ()
   assert.ok(off < 0.01, `angle from the ré should be ~0, got ${r.fromBacksight}`);
 });
 
+test('a setup oriented on two faces still reads ~0 from the ré, and agrees with its own sights', () => {
+  // The two-face orientation is the mean, which carries no collimation, so the
+  // circle shows what a two-face sight would record — not face I's +c.
+  const { over, backsight } = twoPoints();
+  const rng = makeRng('readout', 'two-face');
+  const setup = setupOverKnownPoint({ over, backsight, kit: kit(), rng, twoFace: true });
+  const atRe = aimReadout(setup, backsight.trueE, backsight.trueN);
+  const off = Math.min(atRe.fromBacksight, 360 - atRe.fromBacksight) * 3600;
+  assert.ok(off < 40, `angle from the ré should be ~0 on two faces, got ${off.toFixed(1)}"`);
+
+  // And the azimuth it shows for a point is the one a two-face sight reduces to.
+  const target = { id: 'T', trueE: 260, trueN: 290 };
+  const shown = aimReadout(setup, target.trueE, target.trueN).azimuth;
+  const sight = sightTarget({ setup: { ...setup, observations: [] }, target, kit: kit(), rng, twoFace: true });
+  const diff = Math.abs(((sight.azimuth - shown + 540) % 360) - 180) * 3600;
+  assert.ok(diff < 60, `readout and recorded sight disagree by ${diff.toFixed(1)}"`);
+});
+
 test('the angle from the ré is measured to the right, whatever the circle reads', () => {
   // ARBITRARY leaves the circle wherever it sits, so backsightReading is not 0
   // and a readout that merely echoed Hz would be wrong.
