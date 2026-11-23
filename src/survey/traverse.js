@@ -13,6 +13,7 @@
 
 import { normalize360 } from './units.js';
 import { azimuth as azFromCoords, courseComponents } from './geometry.js';
+import { traverseAngleSigmas } from './budget.js';
 
 export const RULE = { BOWDITCH: 'bowditch', TRANSIT: 'transit' };
 
@@ -37,9 +38,15 @@ export function expectedAngleSum(nStations, observedSum) {
 }
 
 /**
- * Permissible angular closure, in arc-seconds.
+ * Permissible angular closure counting the INSTRUMENT ONLY, in arc-seconds.
  * A measured angle is the difference of two directions, hence the √2; the
  * factor 2 takes it to roughly 95% confidence.
+ *
+ * This is the textbook formula, and on this game's short legs it is far too
+ * tight: centring a 5 mm pole 15 m away is worth a minute of arc on its own, and
+ * this ignores it. Measured over 71 honest starter-kit surveys, 11 met it.
+ * `computeTraverse` therefore applies it only when it is given no kit; with
+ * one, the tolerance is 2σ of the closure with the centring in — see below.
  */
 export function angularTolerance(sigmaDirSec, nStations) {
   return 2 * sigmaDirSec * Math.SQRT2 * Math.sqrt(nStations);
@@ -53,7 +60,11 @@ export function angularTolerance(sigmaDirSec, nStations) {
  * @param {{E:number, N:number}} p.startPoint  coordinates of stations[0]
  * @param {number} p.startAzimuth           azimuth of stations[0] -> stations[1]
  * @param {string} [p.rule]                 'bowditch' | 'transit'
- * @param {number} [p.sigmaDirSec]          instrument direction sigma, for the tolerance
+ * @param {number} [p.sigmaDirSec]          instrument direction sigma, for the nominal tolerance
+ * @param {object} [p.kit]                  resolved instrument/tripod/target: with it, the
+ *        tolerance is 2·√Σσ_βᵢ², each σ_β with the directions AND the centring
+ *        of that station's two readings (`budget.js#traverseAngleSigmas`)
+ * @param {Array<{back:boolean, fwd:boolean}>} [p.faces]  the faces each angle's two readings were taken on
  */
 export function computeTraverse({
   stations,
@@ -63,6 +74,8 @@ export function computeTraverse({
   startAzimuth,
   rule = RULE.BOWDITCH,
   sigmaDirSec = 10,
+  kit = null,
+  faces = null,
 }) {
   const n = stations.length;
   if (n < 3) return { ok: false, reason: 'needThreeStations', n };
@@ -75,7 +88,13 @@ export function computeTraverse({
   const sumObs = obs.reduce((s, a) => s + a, 0);
   const theo = expectedAngleSum(n, sumObs);
   const eAngSec = (sumObs - theo.sum) * 3600;
-  const tolAngSec = angularTolerance(sigmaDirSec, n);
+  // What these angles, on these legs, with this kit, should close to — 2σ, the
+  // same ~95% convention as the textbook formula, but with centring counted.
+  const tolAngNominalSec = angularTolerance(sigmaDirSec, n);
+  const angleSigmas = kit ? traverseAngleSigmas({ kit, angles: obs, distances, faces: faces || [] }) : null;
+  const tolAngSec = angleSigmas
+    ? 2 * Math.sqrt(angleSigmas.reduce((s, a) => s + a.total * a.total, 0))
+    : tolAngNominalSec;
   const angOk = Math.abs(eAngSec) <= tolAngSec;
 
   // ---- 2. Equal distribution ---------------------------------------------
@@ -164,6 +183,12 @@ export function computeTraverse({
     loopDirection: theo.loop,
     eAngSec,
     tolAngSec,
+    /** The instrument-only figure, kept for comparison. */
+    tolAngNominalSec,
+    tolIncludesCentring: Boolean(angleSigmas),
+    /** σ_β per station, when a kit was given. */
+    angleSigmas,
+    faces: faces || null,
     angOk,
     angleCorrSec: corrSec,
     adjAngles,

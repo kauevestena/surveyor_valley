@@ -1,7 +1,8 @@
 // What the instrument would be reading, right now.
 //
-// The live counterpart of `sightTarget`: the same geometry, with no random
-// draws, no collimation and no record kept. Swinging the telescope around and
+// The live counterpart of `sightTarget`: the same geometry, read on the faces
+// the station was oriented on (collimation included), but with no random draws
+// and no record kept. Swinging the telescope around and
 // watching the circle move is how the relationship between a reading, the
 // orientation constant and an azimuth stops being three formulas and becomes
 // one thing — which is what `descricao.md` asks for when it says angles,
@@ -14,6 +15,7 @@
 import { normalize360 } from './units.js';
 import { azimuth, distance } from './geometry.js';
 import { angleBetween } from './station.js';
+import { getInstrument, collimationFor, FACE } from './instrument.js';
 
 /**
  * The readout for a setup pointed at a world position.
@@ -45,7 +47,16 @@ export function aimReadout(setup, tE, tN) {
   // The circle reading. `circleOffset` is the azimuth the circle calls zero, so
   // subtracting it is what turns a direction in the world into a number on the
   // instrument face.
-  const hz = normalize360(trueAz - setup.circleOffset);
+  //
+  // Read on the same faces the orientation was taken on, which is what a
+  // consistent sight records: face I reads c high, so a single-face setup shows
+  // it — leave it out and the circle aimed back at the ré would read −c instead
+  // of the zero just set there — while on two faces the mean carries none.
+  const c =
+    setup.instrumentId != null && !setup.backsightTwoFace
+      ? collimationFor(getInstrument(setup.instrumentId), FACE.DIRECT)
+      : 0;
+  const hz = normalize360(trueAz - setup.circleOffset + c);
 
   // And the reduction the player would then do by hand.
   const az = normalize360(hz + setup.theta0);

@@ -12,7 +12,8 @@
 import { el, clear } from './dom.js';
 import { t, num } from './i18n.js';
 import { shopState, buy, marcoPackPrice, MARCO_PACK } from '../game/economy.js';
-import { angularTolerance } from '../survey/traverse.js';
+import { resolveKit } from '../survey/instrument.js';
+import { typicalTolerance, TYPICAL_LEG } from '../survey/budget.js';
 
 /**
  * @param {object} p
@@ -102,12 +103,21 @@ export function showShop({ modals, store, onChange, sfx }) {
     const detail = [];
     if (item.spec.sigmaDirSec != null) {
       detail.push(`${item.spec.sigmaDirSec}" · ${item.spec.distA_mm} mm + ${item.spec.distPPM} ppm`);
-      // What that instrument would permit as angular closure on a 5-station
-      // loop: the number the Cálculos panel checks against.
-      detail.push(t('shop.tolerance', { sec: num(angularTolerance(item.spec.sigmaDirSec, 5), 1) }));
     }
     if (item.spec.centringSigma_mm != null) {
       detail.push(t('shop.centring', { mm: num(item.spec.centringSigma_mm, 1) }));
+    }
+    // The angular tolerance this item would earn, swapped into the rest of what
+    // the player carries, on a typical traverse: the same 2σ, centring in, that
+    // the cálculos panel checks against. On this valley's short legs it is the
+    // tripod and the target that move it most — which is worth seeing before
+    // spending fifty thousand on a 1" instrument.
+    const state = store.get();
+    const current = resolveKit(state.inventory);
+    if (current[slot]) {
+      const kit = { ...current, [slot]: { ...current[slot], ...item.spec } };
+      const sec = typicalTolerance({ kit, twoFace: Boolean(state.settings?.twoFace) });
+      detail.push(t('shop.tolerance', { sec: num(sec, 0), leg: TYPICAL_LEG }));
     }
 
     return el(

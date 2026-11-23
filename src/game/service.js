@@ -265,6 +265,9 @@ export function makeService({ store, getWorld, bus, EV, getPlayerPos = () => nul
       kit: kit(),
       rng,
       orientMode,
+      // The ré is read on the faces chosen now. Foresights later read on other
+      // faces mix them, and the collimation comes back as a rotation.
+      twoFace: Boolean(state().settings.twoFace),
     });
     setup.parcelId = svc.parcelId;
     store.addSetup(setup);
@@ -337,6 +340,9 @@ export function makeService({ store, getWorld, bus, EV, getPlayerPos = () => nul
       observations: [],
     };
 
+    // The resection's sights ARE this station's orientation, so they are read on
+    // the faces chosen now — the free-station counterpart of the ré's faces.
+    const twoFace = Boolean(state().settings.twoFace);
     const raw = [];
     for (const id of usable) {
       const target = truePositionOf(id);
@@ -346,7 +352,7 @@ export function makeService({ store, getWorld, bus, EV, getPlayerPos = () => nul
         { targetId: id },
       );
       if (!los.clear) continue;
-      const obs = sightTarget({ setup: provisional, target, kit: kit(), rng });
+      const obs = sightTarget({ setup: provisional, target, kit: kit(), rng, twoFace });
       provisional.observations.push(obs);
       raw.push({ targetId: id, hz: obs.hz, distance: obs.distance });
     }
@@ -368,6 +374,8 @@ export function makeService({ store, getWorld, bus, EV, getPlayerPos = () => nul
       circleOffset,
       theta0: solution.theta0,
       resection: solution,
+      /** The faces the orientation was taken on; later sights on others mix them. */
+      backsightTwoFace: twoFace,
       instrumentId: kit().instrument.id,
       parcelId: svc.parcelId,
       observations: [],
@@ -433,9 +441,9 @@ export function makeService({ store, getWorld, bus, EV, getPlayerPos = () => nul
       return { ok: false, reason: 'blocked', blocked: true, blockers: los.blockers, kind: blocker.kind };
     }
 
-    // Two faces by default once the player has switched it on: it is a
-    // per-sight choice, so a rushed single-face survey stays possible — and
-    // measurably worse, because collimation never averages out.
+    // Two faces by default once the player has switched it on. It is a
+    // per-sight choice: one face is quicker and noisier, and collimation still
+    // cancels against the ré as long as the ré was read on the same faces.
     const obs = sightTarget({
       setup,
       target,
@@ -531,7 +539,7 @@ export function makeService({ store, getWorld, bus, EV, getPlayerPos = () => nul
     const input = buildTraverseInput();
     if (!input.ok) return input;
 
-    const inst = kit().instrument;
+    const k = kit();
     const result = computeTraverse({
       stations: input.stations,
       angles: input.angles,
@@ -539,7 +547,11 @@ export function makeService({ store, getWorld, bus, EV, getPlayerPos = () => nul
       startPoint: input.startPoint,
       startAzimuth: input.startAzimuth,
       rule: rule || state().settings.compRule || RULE.BOWDITCH,
-      sigmaDirSec: inst.sigmaDirSec,
+      sigmaDirSec: k.instrument.sigmaDirSec,
+      // The kit puts the centring into the tolerance. The kit carried NOW, as
+      // the instrument σ always was.
+      kit: k,
+      faces: input.faces,
     });
 
     if (result.ok) {

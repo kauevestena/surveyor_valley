@@ -11,6 +11,7 @@ import { t, num, lang, locale, angleFormat } from './i18n.js';
 import { formatAngle } from '../survey/units.js';
 import { formatRumo } from '../survey/geometry.js';
 import { RULE, formatRelPrecision } from '../survey/traverse.js';
+import { theoryPeek } from './theory.js';
 
 /** Angles honour the player's unit choice: DMS or gon. */
 const fmtAngle = (deg, opts) => formatAngle(deg, angleFormat(), opts);
@@ -43,10 +44,19 @@ function renderBlocked(result) {
  * @param {object} p.area       areaOf() of the surveyed ring, may be null
  * @param {number} p.requiredPrecision
  * @param {(rule:string)=>void} p.onRuleChange
+ * @param {() => void} [p.onTheory]  opens the hidden theory panel; no σ without it
  */
-export function renderCalculos({ traverse, area, requiredPrecision, rule, onRuleChange }) {
+export function renderCalculos({ traverse, area, requiredPrecision, rule, onRuleChange, onTheory = null }) {
   const root = el('div.calculos');
-  root.append(el('p.notice.notice-muted', { text: t('calc.notRigorous') }));
+  root.append(
+    el(
+      'p.notice.notice-muted',
+      {},
+      t('calc.notRigorous'),
+      // Where somebody who reads that sentence and wants more will look.
+      onTheory ? theoryPeek(onTheory) : null,
+    ),
+  );
 
   if (area) {
     root.append(
@@ -120,6 +130,12 @@ export function renderCalculos({ traverse, area, requiredPrecision, rule, onRule
         stat('calc.angularCorrection', `${traverse.angleCorrSec.toFixed(1)}"`),
       ),
       el(`p.verdict${angOk ? '.is-good' : '.is-bad'}`, { text: t(angOk ? 'calc.pass' : 'calc.fail') }),
+      // Where the tolerance comes from. It used to be the instrument's σ alone,
+      // which a 5 mm pole 15 m away beats on its own; saying what it is made of
+      // is what lets a student read a fail as a blunder rather than bad luck.
+      traverse.tolIncludesCentring
+        ? el('p.hint', { text: t('calc.toleranceNote', { nominal: traverse.tolAngNominalSec.toFixed(1) }) })
+        : null,
     ),
   );
 

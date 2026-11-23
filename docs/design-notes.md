@@ -207,6 +207,29 @@ tests/
   and what is left is the error the player earned. The error plot is built by
   `report/errorfigure.js` and is deliberately NOT part of the planta: the planta is the
   deliverable and imitates a legal instrument.
+- **The angular tolerance is 2σ of the closure, centring included.** The textbook
+  `2·√2·σ·√n` counts the instrument only, and on this valley's 11–25 m legs a 5 mm pole is
+  worth more than a minute of arc by itself: 11 of 71 honest starter-kit surveys met it.
+  With a kit, `computeTraverse` sums each station's σ_β instead — both directions and both
+  centrings, on the legs and the faces actually observed (`budget.js#traverseAngleSigmas`).
+  The textbook figure stays as `tolAngNominalSec`, and is what `computeTraverse` applies
+  when it is given no kit, which is what keeps the old tests meaning what they meant. The
+  shop quotes the same 2σ on a typical 25 m pentagon with the rest of the player's kit,
+  which shows — truthfully — that the prism matters before the instrument.
+- **There is a hidden panel, "Bastidores do erro", and it never reads the truth.** Typing
+  `erro` anywhere opens it (four keys within 4 s of each other; none of the four does
+  anything else), and so does a faint σ beside the "not rigorous" notice in the cálculos and
+  beside the per-corner heading in the debrief. It is not on the rail or the intro's controls
+  page on purpose: it is a reference for whoever goes looking. It holds the theory — the
+  path the error takes through this game, the law of propagation of variances, the
+  instrument model as coded, radiation, the traverse, the free station, the area — and a
+  live box that runs the player's own kit and survey through `survey/budget.js`. That box
+  shows predictions and the player's own misclosures only, so the panel can be opened in the
+  middle of a job without breaking the rule above. It reads `activeService.traverse` rather
+  than calling `runTraverse()`, because running the traverse rewrites the network. Every
+  formula it prints is checked by simulation in `tests/budget.test.mjs`, most of them against
+  the game's own observation model. Over 71 real starter-kit surveys the predicted σ of the
+  angular misclosure came within 7% of the observed RMS, and the linear one within 10%.
 - **The overlay canvas is UNDER the HTML panels**, so anything pinned to an edge can be
   drawn behind one and be, for the player, simply absent. `main.js#measureSafeArea` reports
   what the panels cover and every edge marker clamps inside it. Each panel owns exactly ONE
@@ -234,11 +257,19 @@ The fourth is **systematic**, and the distinction is the whole point:
 
 4. **Collimation** `c` — a fixed mechanical misalignment, the same on every reading from
    that instrument forever. Averaging a thousand readings on one face leaves it exactly
-   where it was; one pair of faces removes it. Observing on both faces (PD/PI) is
-   optional per sight, so a rushed single-face survey stays possible and is measurably
-   worse, and the field book shows `2c = PD − (PI − 180°)` so the student can read off
-   how far out the instrument is. The starting 10" instrument carries 22"; the 1" carries
-   three.
+   where it was in each reading; one pair of faces removes it, and the field book shows
+   `2c = PD − (PI − 180°)` so the student can read off how far out the instrument is.
+   The starting 10" instrument carries 22"; the 1" carries three.
+
+   **It rides on the ré too, so it cancels — unless the faces are mixed.** The ré is read
+   like any other sight, on the faces chosen at setup (a free station's resection sights
+   likewise), and on the level sights of a planimetric survey c then cancels between the
+   ré and the vantes, as on a real instrument. It used to be applied to the vantes only,
+   which turned every radiated corner of a single-face survey by c — a model of something
+   an instrument does not do. What survives, faithfully, is mixing faces: the ré on one,
+   the vantes on two, and every radiated azimuth turns by ±c. Two faces still buy the 2c
+   check and √2 less pointing noise; the real-world reason they matter more, c/sin z on
+   steep sights, needs heights this game does not have, and the panel says so.
 
 The traverse is treated at the level the course teaches: angular closure against a
 tolerance, equal distribution, azimuth propagation, linear closure, relative precision,

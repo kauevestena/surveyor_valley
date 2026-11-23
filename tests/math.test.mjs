@@ -6,7 +6,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { sightTarget } from '../src/survey/station.js';
+import { sightTarget, setupOverKnownPoint, ORIENT } from '../src/survey/station.js';
 
 import { formatDMS, parseDMS, normalize360, normalize180, degToSec, degToGon, gonToDeg, formatGon, formatAngle } from '../src/survey/units.js';
 import { azimuth, polarPoint, rumo, formatRumo, areaOf, perimeterOf, sideTable } from '../src/survey/geometry.js';
@@ -685,6 +685,68 @@ test('the two-face mean is taken the short way round the circle', () => {
     const off = Math.abs(normalize180(o.hz - 0)) * 3600;
     assert.ok(off < 120, `mean across 0° went wrong: hz=${o.hz.toFixed(6)} (${off.toFixed(1)}" off north)`);
   }
+});
+
+/**
+ * Where collimation goes once the ré is a sight like any other.
+ *
+ * Face I reads c high on the ré AND on the vantes, so on the level sights of a
+ * planimetric survey it cancels between them whenever both are read on the
+ * same faces — what a real instrument does. What it punishes is mixing: the ré
+ * on one face and the vantes on two, or the other way round, turns every
+ * radiated azimuth by c. Measured through the whole setup-then-sight path, in
+ * both ways of orienting the circle.
+ */
+test('collimation cancels between ré and vante on the same faces, and turns everything by c when they are mixed', () => {
+  const kit = resolveKit({ instrument: 'et10', tripod: 'tri-mad', target: 'bastao' });
+  const c = getInstrument('et10').collimationSec;
+  // No centring anywhere, so only collimation and pointing remain.
+  const clean = { ...kit, tripod: { centringSigma_mm: 0 }, target: { centringSigma_mm: 0 } };
+  const over = { id: 'S', E: 1000, N: 1000, trueE: 1000, trueN: 1000 };
+  const backsight = { id: 'R', E: 1000, N: 1080, trueE: 1000, trueN: 1080 };
+  const target = { id: 'T', trueE: 1120, trueN: 1060 };
+  const truth = azimuth(1000, 1000, target.trueE, target.trueN);
+
+  for (const orientMode of [ORIENT.ZERO_BACKSIGHT, ORIENT.ARBITRARY]) {
+    for (const [faceRe, faceSight, expected] of [
+      [false, false, 0],
+      [true, true, 0],
+      [false, true, -c],
+      [true, false, +c],
+    ]) {
+      const rng = makeRng('collimation', `${orientMode}-${faceRe}-${faceSight}`);
+      let sum = 0;
+      const n = 3000;
+      for (let i = 0; i < n; i++) {
+        const setup = setupOverKnownPoint({ over, backsight, kit: clean, rng, orientMode, twoFace: faceRe });
+        const o = sightTarget({ setup, target, kit: clean, rng, twoFace: faceSight });
+        sum += normalize180(o.azimuth - truth) * 3600;
+      }
+      const bias = sum / n;
+      assert.ok(
+        Math.abs(bias - expected) < 1.5,
+        `${orientMode}, ré ${faceRe ? 'PD/PI' : 'PD'}, vante ${faceSight ? 'PD/PI' : 'PD'}: expected ${expected}", measured ${bias.toFixed(2)}"`,
+      );
+    }
+  }
+});
+
+test('a two-face ré records both readings, and zeroing still puts 0 on face I', () => {
+  const kit = resolveKit({ instrument: 'et10', tripod: 'tri-mad', target: 'bastao' });
+  const over = { id: 'S', E: 1000, N: 1000, trueE: 1000, trueN: 1000 };
+  const backsight = { id: 'R', E: 1000, N: 1080, trueE: 1000, trueN: 1080 };
+  const one = setupOverKnownPoint({ over, backsight, kit, rng: makeRng('re', 'one') });
+  assert.equal(one.backsightTwoFace, false);
+  assert.equal(one.backsightPD, 0);
+  assert.equal(one.backsightPI, null);
+  assert.equal(one.backsightReading, 0);
+
+  const two = setupOverKnownPoint({ over, backsight, kit, rng: makeRng('re', 'two'), twoFace: true });
+  assert.equal(two.backsightTwoFace, true);
+  assert.equal(two.backsightPD, 0, 'zeroing is done on face I');
+  const piOff = normalize180(two.backsightPI - 180) * 3600;
+  assert.ok(Math.abs(piOff + 2 * getInstrument('et10').collimationSec) < 80, `face II reads about 180° − 2c, got ${piOff.toFixed(1)}"`);
+  near(normalize180(two.backsightReading - piOff / 7200), 0, 1e-9, 'the orientation reading is the mean of the two');
 });
 
 // ----------------------------------------------------------------- gon -----

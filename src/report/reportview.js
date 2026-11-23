@@ -6,6 +6,7 @@
 
 import { el, clear } from './../ui/dom.js';
 import { t, num } from './../ui/i18n.js';
+import { theoryPeek } from './../ui/theory.js';
 import { fmtDuration } from '../survey/units.js';
 import { font } from '../render/tokens.js';
 
@@ -146,8 +147,11 @@ export function docBlocksToHtml(blocks) {
   return root;
 }
 
-/** The end-of-service scorecard: what the player got, and how close it was. */
-export function renderDebrief(result) {
+/**
+ * The end-of-service scorecard: what the player got, and how close it was.
+ * @param {{onTheory?: () => void}} [opts]  shows the faint σ to the theory panel
+ */
+export function renderDebrief(result, { onTheory = null } = {}) {
   const d = result.debrief;
   const row = (labelKey, value, cls = '') =>
     el(`div.stat${cls}`, {}, el('span.stat-label', { text: t(labelKey) }), el('span.stat-value', { text: value }));
@@ -173,19 +177,19 @@ export function renderDebrief(result) {
     // Which corner, not just how much. The aggregate figures above are
     // datum-invariant and answer a different question; this one needs the
     // frames aligned, which is why it took a `datumShift` to become possible.
-    d.corners?.length ? renderCornerErrors(d) : null,
+    d.corners?.length ? renderCornerErrors(d, onTheory) : null,
   );
 }
 
 /** Per-corner error, worst first: the list a student can act on. */
-function renderCornerErrors(d) {
+function renderCornerErrors(d, onTheory) {
   const mm = (v) => `${(v * 1000).toFixed(0)} mm`;
   const rows = [...d.corners].sort((a, b) => b.d - a.d);
 
   return el(
     'section.debrief-corners',
     {},
-    el('h4', { text: t('debrief.perCorner') }),
+    el('h4', {}, t('debrief.perCorner'), onTheory ? theoryPeek(onTheory) : null),
     el('p.hint', {
       text: t('debrief.perCornerHelp', { rms: mm(d.cornerRms), control: mm(d.control?.rms ?? 0) }),
     }),
